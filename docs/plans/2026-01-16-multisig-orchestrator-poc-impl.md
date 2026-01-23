@@ -1266,6 +1266,266 @@ git commit -am "feat(poc): complete multisig orchestrator POC"
 
 ---
 
+## Appendix A: Transaction Manifest Reference
+
+These are the string-format manifests equivalent to what the Rust code generates. Useful for testing in the Radix Console or understanding the transaction structure.
+
+### A.1 DAO Treasury Creation Manifest
+
+Creates an account with 3-of-4 Ed25519 virtual signature badge access rule on Stokenet.
+
+#### Virtual Signature Badge Format
+
+The NonFungibleLocalId for a signature badge is derived from the public key:
+1. Take the Ed25519 public key (32 bytes)
+2. Hash with Blake2b-256
+3. Take the **last 26 bytes** of the hash
+4. Hex encode
+
+```typescript
+// Derivation example (from https://gist.github.com/xstelea/7ae4a89bc2fd9909660a7881d3aacd7c)
+function deriveNftLocalId(publicKeyHex: string): string {
+  const publicKeyBytes = hexToBytes(publicKeyHex);
+  const hash = blake2b(publicKeyBytes, { dkLen: 32 });
+  const last26Bytes = hash.slice(-26);
+  return bytesToHex(last26Bytes);
+}
+```
+
+**Virtual Signature Badge Resource:**
+| Network | Resource Address |
+|---------|------------------|
+| **Stokenet** | `resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08` |
+| Mainnet | `resource_rdx1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxxu85e5y` |
+
+#### Example Derivation
+
+For public key `554a6db54c09d609deabf5b234ab3627cdd182ebf0d60baa070ba4ba2e8e5b7a`:
+- Blake2b-256 hash → take last 26 bytes → `a1b2c3...` (52 hex chars)
+- NonFungibleGlobalId: `resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[a1b2c3...]`
+
+#### Manifest
+
+```
+# Lock fee from funding account
+CALL_METHOD
+    Address("<funder_account>")
+    "lock_fee"
+    Decimal("20")
+;
+
+# Reserve an address for the new account
+ALLOCATE_GLOBAL_ADDRESS
+    Address("package_tdx_2_1pkgxxxxxxxxxaccntxxxxxxxxxx000929625493xxxxxxxxxtpu8hm")
+    "Account"
+    AddressReservation("address_reservation")
+    NamedAddress("new_account_address")
+;
+
+# Create account with 3-of-4 signature-based multisig access rule
+# Each signer's NFT local ID = last 26 bytes of Blake2b-256(public_key)
+CALL_FUNCTION
+    Address("package_tdx_2_1pkgxxxxxxxxxaccntxxxxxxxxxx000929625493xxxxxxxxxtpu8hm")
+    "Account"
+    "create_advanced"
+    Enum<1u8>(                              # OwnerRole::Fixed
+        Enum<2u8>(                          # AccessRule::Protected
+            Enum<1u8>(                      # CompositeRequirement::AnyOf
+                3u8                         # require 3 of 4
+                Array<Enum>(
+                    # Signer 1 - derived from Ed25519 public key
+                    Enum<0u8>(              # BasicRequirement::Require
+                        Enum<0u8>(          # ResourceOrNonFungible::NonFungible
+                            NonFungibleGlobalId(
+                                "resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[<signer1_blake2b_last26_hex>]"
+                            )
+                        )
+                    )
+                    # Signer 2
+                    Enum<0u8>(
+                        Enum<0u8>(
+                            NonFungibleGlobalId(
+                                "resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[<signer2_blake2b_last26_hex>]"
+                            )
+                        )
+                    )
+                    # Signer 3
+                    Enum<0u8>(
+                        Enum<0u8>(
+                            NonFungibleGlobalId(
+                                "resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[<signer3_blake2b_last26_hex>]"
+                            )
+                        )
+                    )
+                    # Signer 4
+                    Enum<0u8>(
+                        Enum<0u8>(
+                            NonFungibleGlobalId(
+                                "resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[<signer4_blake2b_last26_hex>]"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    Enum<1u8>(                              # Some(AddressReservation)
+        AddressReservation("address_reservation")
+    )
+;
+
+# Fund the new DAO treasury with XRD
+CALL_METHOD
+    Address("<funder_account>")
+    "withdraw"
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Decimal("500")
+;
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Bucket("xrd_bucket")
+;
+CALL_METHOD
+    NamedAddress("new_account_address")
+    "try_deposit_or_abort"
+    Bucket("xrd_bucket")
+    Enum<0u8>()                             # None (authorized depositor badge)
+;
+```
+
+### A.2 Withdrawal Sub-Intent Manifest
+
+This is a **subintent manifest** that withdraws XRD from the DAO treasury. It must be signed by 3 of 4 signers and wrapped by a parent transaction.
+
+```
+# Withdraw from DAO treasury (requires 3-of-4 signatures on this subintent)
+CALL_METHOD
+    Address("<dao_treasury_account>")
+    "withdraw"
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Decimal("100")
+;
+
+# Take the withdrawn XRD from worktop
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Bucket("withdrawn_xrd")
+;
+
+# Deposit to recipient
+CALL_METHOD
+    Address("<recipient_account>")
+    "try_deposit_or_abort"
+    Bucket("withdrawn_xrd")
+    Enum<0u8>()
+;
+
+# Required: yield back to parent transaction
+YIELD_TO_PARENT;
+```
+
+**Key points:**
+- The subintent is signed by 3 of the 4 signers (not the fee payer)
+- `YIELD_TO_PARENT` is mandatory - marks the end of the subintent
+- The parent transaction will "call" this subintent via `YIELD_TO_CHILD`
+
+### A.3 Parent Transaction Manifest (Fee Payer Wrapper)
+
+This is the **root transaction manifest** that wraps the signed subintent.
+
+```
+# Declare the child subintent (at start of manifest)
+USE_CHILD
+    NamedIntent("dao_withdraw")
+    Intent("<subintent_hash>")              # subtxid_tdx_2_... from signed subintent
+;
+
+# Lock fee from fee payer account
+CALL_METHOD
+    Address("<fee_payer_account>")
+    "lock_fee"
+    Decimal("10")
+;
+
+# Execute the child subintent
+YIELD_TO_CHILD NamedIntent("dao_withdraw");
+```
+
+**Key points:**
+- `USE_CHILD` declares the subintent at the manifest start
+- The `Intent("<subintent_hash>")` is the hash of the signed partial transaction
+- `YIELD_TO_CHILD` invokes the subintent, passing control to it
+- Fee payer only signs the root transaction, not the subintent
+
+### A.4 Access Rule Reference
+
+**OwnerRole discriminators:**
+| Pattern | Meaning |
+|---------|---------|
+| `Enum<0u8>()` | `OwnerRole::None` - No owner |
+| `Enum<1u8>(rule)` | `OwnerRole::Fixed(rule)` - Cannot be changed |
+| `Enum<2u8>(rule)` | `OwnerRole::Updatable(rule)` - Can be updated |
+
+**AccessRule discriminators:**
+| Pattern | Meaning |
+|---------|---------|
+| `Enum<0u8>()` | `AllowAll` |
+| `Enum<1u8>()` | `DenyAll` |
+| `Enum<2u8>(composite)` | `Protected(CompositeRequirement)` |
+
+**CompositeRequirement discriminators:**
+| Pattern | Meaning |
+|---------|---------|
+| `Enum<0u8>(basic)` | Single `BasicRequirement` |
+| `Enum<1u8>(count, Array)` | `AnyOf` - at least `count` of requirements |
+| `Enum<2u8>(Array)` | `AllOf` - all requirements must be met |
+
+**BasicRequirement discriminators:**
+| Pattern | Meaning |
+|---------|---------|
+| `Enum<0u8>(resource_or_nf)` | `Require` - must have the resource/NFT |
+| `Enum<1u8>(amount, resource)` | `AmountOf` - must have at least amount |
+
+**ResourceOrNonFungible discriminators:**
+| Pattern | Meaning |
+|---------|---------|
+| `Enum<0u8>(NonFungibleGlobalId)` | Specific NFT (including virtual badges) |
+| `Enum<1u8>(Address)` | Any amount of a fungible resource |
+
+### A.5 Virtual Signature Badge Resources by Network
+
+| Network | Virtual Signature Badge Resource |
+|---------|----------------------------------|
+| **Stokenet** | `resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08` |
+| Mainnet | `resource_rdx1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxxu85e5y` |
+
+**NonFungibleLocalId derivation:**
+```typescript
+// 1. Hash the public key with Blake2b-256
+// 2. Take the last 26 bytes of the hash
+// 3. Hex encode to get the local ID
+
+import { blake2b } from '@noble/hashes/blake2b';
+
+function deriveSignatureBadgeLocalId(publicKeyHex: string): string {
+  const publicKeyBytes = hexToBytes(publicKeyHex);
+  const hash = blake2b(publicKeyBytes, { dkLen: 32 });
+  const last26Bytes = hash.slice(-26);
+  return bytesToHex(last26Bytes);
+}
+```
+
+**Example:**
+```
+Public key: 554a6db54c09d609deabf5b234ab3627cdd182ebf0d60baa070ba4ba2e8e5b7a
+Local ID:   [<52_hex_chars_from_blake2b_last26>]
+Full ID:    NonFungibleGlobalId("resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[...]")
+```
+
+**Reference:** https://gist.github.com/xstelea/7ae4a89bc2fd9909660a7881d3aacd7c
+
+---
+
 ## Notes for Implementation
 
 1. **Radix crate versions:** The `radix-transactions` and related crates are from the `radixdlt-scrypto` monorepo. The tag `v1.3.0` corresponds to the Cuttlefish update. Check the latest tag if this doesn't compile.
