@@ -1,0 +1,28 @@
+[package]
+name = "multisig-poc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Radix crates from local workspace
+radix-transactions = { path = "../radixdlt-scrypto/radix-transactions", default-features = false, features = ["std"] }
+radix-common = { path = "../radixdlt-scrypto/radix-common", default-features = false, features = ["std"] }
+radix-engine-interface = { path = "../radixdlt-scrypto/radix-engine-interface", default-features = false, features = ["std"] }
+
+# HTTP client for Gateway API
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Hex encoding
+hex = "0.4"
+
+[[bin]]
+name = "generate_keys"
+path = "src/bin/generate_keys.rs"
