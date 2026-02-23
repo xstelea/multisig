@@ -1,3 +1,9 @@
 .repos/
 .meetings/
 .claude/skills/
+
+node_modules/
+.env
+.output/
+target/
+*.lock
