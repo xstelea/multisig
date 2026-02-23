@@ -132,8 +132,55 @@ Completed: 2026-02-23
 - 23 unit tests pass (4 gateway + 4 proposal store + 5 transaction builder + 10 signature collector)
 - Frontend TypeScript types pass cleanly
 
-## Issue 4: Submit transaction
-Status: Not started
+## Issue 4: Submit transaction ✅
+Completed: 2026-02-23
+
+### What was built
+
+**Database:**
+- `submission_attempts` table migration (004_submission_attempts.sql): id, proposal_id (FK), fee_payer_account, tx_hash, status, error_message, created_at
+- Index on proposal_id for audit trail lookups
+
+**Backend (multisig-server/):**
+- GatewayClient — 3 new methods:
+  - `submit_transaction(notarized_transaction_hex)` — POST to Gateway /transaction/submit
+  - `get_transaction_status(intent_hash)` — POST to /transaction/status
+  - `wait_for_commit(intent_hash, max_attempts)` — async polling loop (2s intervals), handles CommittedSuccess/CommittedFailure/Rejected
+- TransactionBuilder — 4 new functions:
+  - `reconstruct_signed_partial(partial_bytes, signatures)` — deserializes stored unsigned partial, attaches all collected Ed25519 signatures
+  - `compose_main_transaction(network_id, epoch, fee_signed_partial, withdrawal_signed_partial)` — builds NotarizedTransactionV2 with ephemeral notary key, two child subintents (fee_payment + withdrawal), YIELD_TO_CHILD orchestration
+  - `build_fee_manifest(fee_payer_account, lock_fee_amount)` — generates RTM manifest text for fee payer to sign
+  - `compose_main_transaction_with_discriminator()` — deterministic variant for testing
+- ProposalStore — 2 new methods:
+  - `get_partial_transaction_bytes(id)` — fetches raw stored partial bytes
+  - `update_tx_id(id, tx_id)` — sets tx_id + submitted_at after submission
+  - `record_submission_attempt()` — audit trail for each submission attempt
+- SignatureCollector — 1 new method:
+  - `get_raw_signatures(proposal_id)` — returns (public_key_hex, signature_bytes) pairs for transaction reconstruction
+- API endpoints:
+  - POST /proposals/{id}/prepare — validates Ready state, returns fee manifest text for wallet signing
+  - POST /proposals/{id}/submit — decodes fee payment hex, reconstructs withdrawal signed partial, composes NotarizedTransactionV2, transitions Ready→Submitting, submits to Gateway, polls for commit, transitions to Committed or Failed
+
+**Frontend (multisig-app/):**
+- OrchestratorClient — added prepareSubmission() and submitProposal() with Effect Schema validation
+- Proposal atoms — makePrepareSubmissionAtom(id), makeSubmitProposalAtom (calls submit + refreshes proposal detail/list)
+- Proposal detail page updated:
+  - SubmitSection component (shown when status=ready): 3-step flow with progress feedback
+    1. Calls prepare endpoint with fee_payer_account
+    2. Sends fee manifest to wallet via sendPreAuthorizationRequest
+    3. Calls submit endpoint with signed fee payment hex
+  - TransactionResult component (shown when committed/failed): tx_id display, submitted_at timestamp
+
+### Architecture decisions
+- Wallet sendTransaction() compiles+signs+notarizes+submits — cannot include pre-signed child subintents
+- Solution: fee payer signs fee subintent via sendPreAuthorizationRequest; backend composes full NotarizedTransactionV2 with TWO children (fee + withdrawal) and ephemeral notary key
+- Original unsigned partial (stored at proposal creation) + all collected signatures = properly reconstructed SignedPartialTransactionV2 for the main TX
+- Server notarizes with notary_is_signatory: false (ephemeral key, no on-ledger role)
+
+### Tests
+- 28 unit tests pass (4 gateway + 4 proposal store + 10 transaction builder + 10 signature collector)
+- 5 new transaction builder tests: reconstruct_signed_partial, compose_main_transaction valid output, different discriminators, build_fee_manifest, reconstruct rejects wrong key
+- Frontend TypeScript types pass cleanly
 
 ## Issue 5: Validity monitoring
 Status: Not started

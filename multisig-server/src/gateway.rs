@@ -124,6 +124,101 @@ impl GatewayClient {
         parse_access_rule(&owner_rule)
     }
 
+    /// Submit a notarized transaction to the network.
+    pub async fn submit_transaction(&self, notarized_transaction_hex: &str) -> Result<bool> {
+        let url = format!("{}/transaction/submit", self.base_url);
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&serde_json::json!({
+                "notarized_transaction_hex": notarized_transaction_hex,
+            }))
+            .send()
+            .await
+            .context("Failed to submit transaction")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("Submit failed ({status}): {error_text}"));
+        }
+
+        let result: SubmitTransactionResponse = response
+            .json()
+            .await
+            .context("Failed to parse submit response")?;
+
+        Ok(result.duplicate)
+    }
+
+    /// Get transaction status by intent hash (bech32-encoded, e.g. "txid_tdx_2_1...").
+    pub async fn get_transaction_status(
+        &self,
+        intent_hash: &str,
+    ) -> Result<TransactionStatusResponse> {
+        let url = format!("{}/transaction/status", self.base_url);
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&serde_json::json!({
+                "intent_hash": intent_hash,
+            }))
+            .send()
+            .await
+            .context("Failed to query transaction status")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("Status query failed ({status}): {error_text}"));
+        }
+
+        let status: TransactionStatusResponse = response
+            .json()
+            .await
+            .context("Failed to parse transaction status")?;
+
+        Ok(status)
+    }
+
+    /// Poll until a transaction is committed or fails.
+    ///
+    /// Returns the final status string ("CommittedSuccess") or an error.
+    pub async fn wait_for_commit(&self, intent_hash: &str, max_attempts: u32) -> Result<String> {
+        for attempt in 0..max_attempts {
+            let status = self.get_transaction_status(intent_hash).await?;
+
+            match status.status.as_str() {
+                "CommittedSuccess" => return Ok("CommittedSuccess".to_string()),
+                "CommittedFailure" => {
+                    return Err(anyhow!(
+                        "Transaction failed: {}",
+                        status.error_message.unwrap_or_default()
+                    ));
+                }
+                "Rejected" => {
+                    return Err(anyhow!(
+                        "Transaction rejected: {}",
+                        status.error_message.unwrap_or_default()
+                    ));
+                }
+                "Pending" | "Unknown" => {
+                    if attempt < max_attempts - 1 {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
+                }
+                other => {
+                    return Err(anyhow!("Unexpected transaction status: {other}"));
+                }
+            }
+        }
+        Err(anyhow!(
+            "Timeout waiting for commit after {max_attempts} attempts"
+        ))
+    }
+
     /// Get the current epoch from the Gateway.
     pub async fn get_current_epoch(&self) -> Result<u64> {
         let url = format!("{}/status/gateway-status", self.base_url);
@@ -318,6 +413,19 @@ fn parse_non_fungible_requirement(req: &serde_json::Value) -> Result<SignerInfo>
         badge_resource: resource_address.to_string(),
         badge_local_id: simple_rep.to_string(),
     })
+}
+
+// --- Transaction submission/status response types ---
+
+#[derive(Debug, Deserialize)]
+struct SubmitTransactionResponse {
+    duplicate: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TransactionStatusResponse {
+    pub status: String,
+    pub error_message: Option<String>,
 }
 
 #[cfg(test)]

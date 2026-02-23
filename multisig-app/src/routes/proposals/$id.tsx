@@ -9,6 +9,8 @@ import {
   makeProposalDetailAtom,
   makeSignatureStatusAtom,
   makeSignProposalAtom,
+  makePrepareSubmissionAtom,
+  makeSubmitProposalAtom,
 } from "@/atom/proposalAtoms";
 import { walletDataAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
 import { ClientOnly } from "@/lib/ClientOnly";
@@ -17,6 +19,7 @@ import type {
   Proposal,
   SignatureStatusType,
   SignerStatus,
+  SubmitProposalResponse,
 } from "@/atom/orchestratorClient";
 import { SubintentRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
 
@@ -91,6 +94,11 @@ function ProposalDetail({ id }: { id: string }) {
     () => makeSignProposalAtom(proposalAtom, sigStatusAtom),
     [proposalAtom, sigStatusAtom]
   );
+  const prepareAtom = useMemo(() => makePrepareSubmissionAtom(id), [id]);
+  const submitAtom = useMemo(
+    () => makeSubmitProposalAtom(proposalAtom),
+    [proposalAtom]
+  );
 
   return Result.builder(proposalResult)
     .onInitial(() => <DetailSkeleton />)
@@ -99,6 +107,8 @@ function ProposalDetail({ id }: { id: string }) {
         proposal={proposal}
         sigStatusAtom={sigStatusAtom}
         signAtom={signAtom}
+        prepareAtom={prepareAtom}
+        submitAtom={submitAtom}
       />
     ))
     .onFailure((error) => (
@@ -114,10 +124,14 @@ function ProposalContent({
   proposal,
   sigStatusAtom,
   signAtom,
+  prepareAtom,
+  submitAtom,
 }: {
   proposal: Proposal;
   sigStatusAtom: ReturnType<typeof makeSignatureStatusAtom>;
   signAtom: ReturnType<typeof makeSignProposalAtom>;
+  prepareAtom: ReturnType<typeof makePrepareSubmissionAtom>;
+  submitAtom: ReturnType<typeof makeSubmitProposalAtom>;
 }) {
   const created = new Date(proposal.created_at).toLocaleString("en-US", {
     dateStyle: "medium",
@@ -169,6 +183,20 @@ function ProposalContent({
         proposal={proposal}
         signAtom={signAtom}
       />
+
+      {/* Submit section — shown when proposal is ready */}
+      {proposal.status === "ready" && (
+        <SubmitSection
+          proposal={proposal}
+          prepareAtom={prepareAtom}
+          submitAtom={submitAtom}
+        />
+      )}
+
+      {/* Transaction result — shown when committed or failed */}
+      {(proposal.status === "committed" || proposal.status === "failed") && (
+        <TransactionResult proposal={proposal} />
+      )}
 
       {/* Manifest text */}
       <section className="space-y-2">
@@ -391,6 +419,197 @@ function SignButton({
       </button>
       {error && <p className="text-sm text-red-400">{error}</p>}
     </div>
+  );
+}
+
+function SubmitSection({
+  proposal,
+  prepareAtom,
+  submitAtom,
+}: {
+  proposal: Proposal;
+  prepareAtom: ReturnType<typeof makePrepareSubmissionAtom>;
+  submitAtom: ReturnType<typeof makeSubmitProposalAtom>;
+}) {
+  const walletResult = useAtomValue(walletDataAtom);
+  const rdtResult = useAtomValue(dappToolkitAtom);
+  const prepareSubmission = useAtomSet(prepareAtom, { mode: "promise" });
+  const submitProposal = useAtomSet(submitAtom, { mode: "promise" });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<SubmitProposalResponse | null>(null);
+
+  const connectedAccount = Result.builder(walletResult)
+    .onSuccess((data) => data?.accounts?.[0]?.address ?? null)
+    .onInitial(() => null)
+    .onFailure(() => null)
+    .render();
+
+  const handleSubmit = useCallback(async () => {
+    if (!connectedAccount) return;
+
+    setError(null);
+    setResult(null);
+    setSubmitting(true);
+
+    try {
+      // Step 1: Get fee manifest from backend
+      setStep("Preparing fee payment...");
+      const prepared = await prepareSubmission(connectedAccount);
+
+      // Step 2: Send fee manifest to wallet for signing
+      setStep("Sign fee payment in your wallet...");
+      const rdt = Result.builder(rdtResult)
+        .onSuccess((r) => r)
+        .onInitial(() => null)
+        .onFailure(() => null)
+        .render();
+
+      if (!rdt) {
+        setError("Wallet not connected");
+        setSubmitting(false);
+        setStep(null);
+        return;
+      }
+
+      const walletResult2 = await rdt.walletApi.sendPreAuthorizationRequest(
+        SubintentRequestBuilder()
+          .manifest(prepared.fee_manifest)
+          .setExpiration("afterDelay", 3600)
+      );
+
+      if (walletResult2.isErr()) {
+        setError(
+          `Wallet error: ${walletResult2.error.message ?? "Unknown error"}`
+        );
+        setSubmitting(false);
+        setStep(null);
+        return;
+      }
+
+      // Step 3: Submit to backend for composition + Gateway submission
+      setStep("Submitting transaction...");
+      const submitResult = await submitProposal({
+        proposalId: proposal.id,
+        signedFeePaymentHex: walletResult2.value.signedPartialTransaction,
+        feePayerAccount: connectedAccount,
+      });
+
+      setResult(submitResult);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSubmitting(false);
+      setStep(null);
+    }
+  }, [
+    connectedAccount,
+    rdtResult,
+    prepareSubmission,
+    submitProposal,
+    proposal.id,
+  ]);
+
+  if (!connectedAccount) {
+    return (
+      <section className="border border-border rounded-lg p-6 bg-card space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          Submit Transaction
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Connect your wallet to submit this proposal as the fee payer.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card space-y-4">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+        Submit Transaction
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        All signatures collected. Submit this proposal by paying the transaction
+        fee.
+      </p>
+
+      <div className="space-y-3">
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submitting ? "Submitting..." : "Pay Fee & Submit"}
+        </button>
+
+        {step && (
+          <p className="text-sm text-muted-foreground animate-pulse">{step}</p>
+        )}
+
+        {error && <p className="text-sm text-red-400">{error}</p>}
+
+        {result && (
+          <div
+            className={`rounded-lg px-4 py-3 text-sm ${
+              result.status === "committed"
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border border-red-500/20 text-red-400"
+            }`}
+          >
+            <p className="font-medium">
+              {result.status === "committed"
+                ? "Transaction committed!"
+                : `Transaction ${result.status}`}
+            </p>
+            {result.tx_id && (
+              <p className="mt-1 font-mono text-xs break-all">
+                TX: {result.tx_id}
+              </p>
+            )}
+            {result.error && <p className="mt-1 text-xs">{result.error}</p>}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TransactionResult({ proposal }: { proposal: Proposal }) {
+  const isCommitted = proposal.status === "committed";
+
+  return (
+    <section
+      className={`border rounded-lg p-6 space-y-2 ${
+        isCommitted
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-red-500/30 bg-red-500/5"
+      }`}
+    >
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+        Transaction Result
+      </h2>
+      <p
+        className={`text-sm font-medium ${isCommitted ? "text-emerald-400" : "text-red-400"}`}
+      >
+        {isCommitted ? "Committed on ledger" : "Transaction failed"}
+      </p>
+      {proposal.tx_id && (
+        <p className="font-mono text-xs text-muted-foreground break-all">
+          {proposal.tx_id}
+        </p>
+      )}
+      {proposal.submitted_at && (
+        <p className="text-xs text-muted-foreground">
+          Submitted{" "}
+          {new Date(proposal.submitted_at).toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </p>
+      )}
+    </section>
   );
 }
 

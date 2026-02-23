@@ -61,6 +61,20 @@ export const SignatureStatusSchema = Schema.Struct({
 });
 export type SignatureStatusType = typeof SignatureStatusSchema.Type;
 
+export const PrepareSubmissionResponseSchema = Schema.Struct({
+  fee_manifest: Schema.String,
+  proposal_status: Schema.String,
+});
+export type PrepareSubmissionResponse =
+  typeof PrepareSubmissionResponseSchema.Type;
+
+export const SubmitProposalResponseSchema = Schema.Struct({
+  status: Schema.String,
+  tx_id: Schema.NullOr(Schema.String),
+  error: Schema.NullOr(Schema.String),
+});
+export type SubmitProposalResponse = typeof SubmitProposalResponseSchema.Type;
+
 // --- Service definition ---
 
 export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
@@ -81,6 +95,15 @@ export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
     readonly getSignatureStatus: (
       id: string
     ) => Effect.Effect<SignatureStatusType, Error>;
+    readonly prepareSubmission: (
+      id: string,
+      feePayerAccount: string
+    ) => Effect.Effect<PrepareSubmissionResponse, Error>;
+    readonly submitProposal: (
+      id: string,
+      signedFeePaymentHex: string,
+      feePayerAccount: string
+    ) => Effect.Effect<SubmitProposalResponse, Error>;
   }
 >() {}
 
@@ -167,6 +190,33 @@ const OrchestratorClientLive = Layer.effect(
             Effect.scoped,
             Effect.catchAll((e) => Effect.fail(new Error(String(e))))
           ),
+
+      prepareSubmission: (id: string, feePayerAccount: string) =>
+        HttpClientRequest.post(`${baseUrl}/proposals/${id}/prepare`).pipe(
+          HttpClientRequest.bodyJson({ fee_payer_account: feePayerAccount }),
+          Effect.flatMap((req) => client.execute(req)),
+          Effect.flatMap((res) => res.json),
+          Effect.flatMap(Schema.decodeUnknown(PrepareSubmissionResponseSchema)),
+          Effect.scoped,
+          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+        ),
+
+      submitProposal: (
+        id: string,
+        signedFeePaymentHex: string,
+        feePayerAccount: string
+      ) =>
+        HttpClientRequest.post(`${baseUrl}/proposals/${id}/submit`).pipe(
+          HttpClientRequest.bodyJson({
+            signed_fee_payment_hex: signedFeePaymentHex,
+            fee_payer_account: feePayerAccount,
+          }),
+          Effect.flatMap((req) => client.execute(req)),
+          Effect.flatMap((res) => res.json),
+          Effect.flatMap(Schema.decodeUnknown(SubmitProposalResponseSchema)),
+          Effect.scoped,
+          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+        ),
     };
   })
 );

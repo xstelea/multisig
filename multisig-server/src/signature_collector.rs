@@ -262,6 +262,20 @@ impl SignatureCollector {
         })
     }
 
+    /// Get raw signature data for transaction reconstruction.
+    ///
+    /// Returns (public_key_hex, signature_bytes) pairs for all signatures on a proposal.
+    pub async fn get_raw_signatures(&self, proposal_id: Uuid) -> Result<Vec<(String, Vec<u8>)>> {
+        let rows: Vec<(String, Vec<u8>)> = sqlx::query_as(
+            "SELECT signer_public_key, signature_bytes FROM signatures WHERE proposal_id = $1 ORDER BY created_at ASC",
+        )
+        .bind(proposal_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
     async fn list_signatures(&self, proposal_id: Uuid) -> Result<Vec<Signature>> {
         let rows = sqlx::query_as::<_, Signature>(
             r#"

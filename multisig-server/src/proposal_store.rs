@@ -125,6 +125,60 @@ impl ProposalStore {
         Ok(rows)
     }
 
+    /// Get the raw partial transaction bytes for a proposal.
+    pub async fn get_partial_transaction_bytes(&self, id: Uuid) -> Result<Vec<u8>> {
+        let row: (Vec<u8>,) =
+            sqlx::query_as("SELECT partial_transaction_bytes FROM proposals WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?
+                .ok_or_else(|| anyhow!("Proposal {id} not found"))?;
+
+        Ok(row.0)
+    }
+
+    /// Update the tx_id and submitted_at fields after submission.
+    pub async fn update_tx_id(&self, id: Uuid, tx_id: &str) -> Result<()> {
+        let result =
+            sqlx::query("UPDATE proposals SET tx_id = $1, submitted_at = NOW() WHERE id = $2")
+                .bind(tx_id)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("Proposal {id} not found"));
+        }
+
+        Ok(())
+    }
+
+    /// Record a submission attempt for audit trail.
+    pub async fn record_submission_attempt(
+        &self,
+        proposal_id: Uuid,
+        fee_payer_account: &str,
+        tx_hash: Option<&str>,
+        status: &str,
+        error_message: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO submission_attempts (proposal_id, fee_payer_account, tx_hash, status, error_message)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(proposal_id)
+        .bind(fee_payer_account)
+        .bind(tx_hash)
+        .bind(status)
+        .bind(error_message)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn transition_status(
         &self,
         id: Uuid,

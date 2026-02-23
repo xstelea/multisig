@@ -16,8 +16,9 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
 use crate::gateway::GatewayClient;
-use crate::proposal_store::{CreateProposal, Proposal, ProposalStore};
+use crate::proposal_store::{CreateProposal, Proposal, ProposalStatus, ProposalStore};
 use crate::signature_collector::{SignatureCollector, SignatureStatus};
+use crate::transaction_builder::StoredSignature;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -243,6 +244,294 @@ async fn get_signature_status(
         })
 }
 
+// --- Submission endpoints ---
+
+#[derive(serde::Deserialize)]
+struct PrepareSubmissionRequest {
+    fee_payer_account: String,
+}
+
+#[derive(serde::Serialize)]
+struct PrepareSubmissionResponse {
+    fee_manifest: String,
+    proposal_status: String,
+}
+
+async fn prepare_submission(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(req): Json<PrepareSubmissionRequest>,
+) -> Result<Json<PrepareSubmissionResponse>, (axum::http::StatusCode, String)> {
+    // Validate proposal exists and is in Ready state
+    let proposal = state
+        .proposal_store
+        .get(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get proposal: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get proposal: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                "Proposal not found".to_string(),
+            )
+        })?;
+
+    if proposal.status != ProposalStatus::Ready {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!(
+                "Proposal is in {:?} status; must be Ready to submit",
+                proposal.status
+            ),
+        ));
+    }
+
+    // Build the fee manifest for the fee payer to sign via sendPreAuthorizationRequest
+    let fee_manifest = transaction_builder::build_fee_manifest(&req.fee_payer_account, "10");
+
+    Ok(Json(PrepareSubmissionResponse {
+        fee_manifest,
+        proposal_status: format!("{:?}", proposal.status).to_lowercase(),
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct SubmitProposalRequest {
+    signed_fee_payment_hex: String,
+    fee_payer_account: String,
+}
+
+#[derive(serde::Serialize)]
+struct SubmitProposalResponse {
+    status: String,
+    tx_id: Option<String>,
+    error: Option<String>,
+}
+
+async fn submit_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(req): Json<SubmitProposalRequest>,
+) -> Result<Json<SubmitProposalResponse>, (axum::http::StatusCode, String)> {
+    // Validate proposal is in Ready state
+    let proposal = state
+        .proposal_store
+        .get(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get proposal: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get proposal: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                "Proposal not found".to_string(),
+            )
+        })?;
+
+    if proposal.status != ProposalStatus::Ready {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!(
+                "Proposal is in {:?} status; must be Ready to submit",
+                proposal.status
+            ),
+        ));
+    }
+
+    // Decode the fee payer's signed partial transaction
+    let fee_bytes = hex::decode(&req.signed_fee_payment_hex).map_err(|e| {
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Invalid fee payment hex: {e}"),
+        )
+    })?;
+    let fee_signed_partial = {
+        use radix_transactions::prelude::*;
+        let raw = RawSignedPartialTransaction::from_vec(fee_bytes);
+        SignedPartialTransactionV2::from_raw(&raw).map_err(|e| {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("Invalid fee payment transaction: {e:?}"),
+            )
+        })?
+    };
+
+    // Reconstruct the DAO withdrawal signed partial from stored data
+    let partial_bytes = state
+        .proposal_store
+        .get_partial_transaction_bytes(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get partial transaction bytes: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get partial transaction bytes: {e}"),
+            )
+        })?;
+
+    let raw_sigs = state
+        .signature_collector
+        .get_raw_signatures(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get signatures: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get signatures: {e}"),
+            )
+        })?;
+
+    let stored_sigs: Vec<StoredSignature> = raw_sigs
+        .into_iter()
+        .map(|(pk, sig)| StoredSignature {
+            public_key_hex: pk,
+            signature_bytes: sig,
+        })
+        .collect();
+
+    let withdrawal_signed_partial =
+        transaction_builder::reconstruct_signed_partial(&partial_bytes, &stored_sigs).map_err(
+            |e| {
+                tracing::error!("Failed to reconstruct signed partial: {e}");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to reconstruct signed partial: {e}"),
+                )
+            },
+        )?;
+
+    // Get current epoch for the main transaction
+    let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
+        tracing::error!("Failed to get current epoch: {e}");
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get current epoch: {e}"),
+        )
+    })?;
+
+    // Compose the main transaction
+    let composed = transaction_builder::compose_main_transaction(
+        state.network_id,
+        current_epoch,
+        fee_signed_partial,
+        withdrawal_signed_partial,
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to compose main transaction: {e}");
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to compose main transaction: {e}"),
+        )
+    })?;
+
+    // Transition Ready → Submitting
+    state
+        .proposal_store
+        .transition_status(id, ProposalStatus::Ready, ProposalStatus::Submitting)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to transition to Submitting: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to transition to Submitting: {e}"),
+            )
+        })?;
+
+    // Record submission attempt
+    let _ = state
+        .proposal_store
+        .record_submission_attempt(
+            id,
+            &req.fee_payer_account,
+            Some(&composed.intent_hash),
+            "submitting",
+            None,
+        )
+        .await;
+
+    // Submit to Gateway
+    let submit_result = state
+        .gateway
+        .submit_transaction(&composed.notarized_transaction_hex)
+        .await;
+
+    match submit_result {
+        Ok(duplicate) => {
+            if duplicate {
+                tracing::warn!("Transaction was a duplicate submission");
+            }
+            tracing::info!("Transaction submitted: {}", composed.intent_hash);
+
+            // Store the tx_id
+            let _ = state
+                .proposal_store
+                .update_tx_id(id, &composed.intent_hash)
+                .await;
+
+            // Poll for commit (max 60 attempts = ~2 minutes)
+            match state
+                .gateway
+                .wait_for_commit(&composed.intent_hash, 60)
+                .await
+            {
+                Ok(_status) => {
+                    let _ = state
+                        .proposal_store
+                        .transition_status(
+                            id,
+                            ProposalStatus::Submitting,
+                            ProposalStatus::Committed,
+                        )
+                        .await;
+
+                    Ok(Json(SubmitProposalResponse {
+                        status: "committed".to_string(),
+                        tx_id: Some(composed.intent_hash),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    let _ = state
+                        .proposal_store
+                        .transition_status(id, ProposalStatus::Submitting, ProposalStatus::Failed)
+                        .await;
+
+                    Ok(Json(SubmitProposalResponse {
+                        status: "failed".to_string(),
+                        tx_id: Some(composed.intent_hash),
+                        error: Some(err_msg),
+                    }))
+                }
+            }
+        }
+        Err(e) => {
+            let err_msg = e.to_string();
+            tracing::error!("Submit failed: {err_msg}");
+
+            let _ = state
+                .proposal_store
+                .transition_status(id, ProposalStatus::Submitting, ProposalStatus::Failed)
+                .await;
+
+            Ok(Json(SubmitProposalResponse {
+                status: "failed".to_string(),
+                tx_id: Some(composed.intent_hash),
+                error: Some(err_msg),
+            }))
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -300,6 +589,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/proposals/{id}", get(get_proposal))
         .route("/proposals/{id}/sign", post(sign_proposal))
         .route("/proposals/{id}/signatures", get(get_signature_status))
+        .route("/proposals/{id}/prepare", post(prepare_submission))
+        .route("/proposals/{id}/submit", post(submit_proposal))
         .layer(cors)
         .with_state(state);
 
