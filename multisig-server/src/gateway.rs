@@ -96,9 +96,7 @@ impl GatewayClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Gateway API returned {status}: {error_text}"
-            ));
+            return Err(anyhow!("Gateway API returned {status}: {error_text}"));
         }
 
         let details: EntityDetailsResponse = response
@@ -283,9 +281,7 @@ fn parse_non_fungible_requirement(req: &serde_json::Value) -> Result<SignerInfo>
         .ok_or_else(|| anyhow!("Missing 'type' in requirement"))?;
 
     if req_type != "NonFungible" {
-        return Err(anyhow!(
-            "Expected NonFungible requirement, got: {req_type}"
-        ));
+        return Err(anyhow!("Expected NonFungible requirement, got: {req_type}"));
     }
 
     let nf = &req["non_fungible"];
@@ -454,9 +450,8 @@ mod tests {
     fn integration_read_access_rule_from_stokenet() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let client = GatewayClient::new(
-                "https://babylon-stokenet-gateway.radixdlt.com".to_string(),
-            );
+            let client =
+                GatewayClient::new("https://babylon-stokenet-gateway.radixdlt.com".to_string());
             let result = client
                 .read_access_rule(
                     "account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp",
@@ -475,9 +470,8 @@ mod tests {
     fn integration_get_current_epoch() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let client = GatewayClient::new(
-                "https://babylon-stokenet-gateway.radixdlt.com".to_string(),
-            );
+            let client =
+                GatewayClient::new("https://babylon-stokenet-gateway.radixdlt.com".to_string());
             let epoch = client.get_current_epoch().await.unwrap();
             assert!(epoch > 0);
             println!("Current epoch: {epoch}");

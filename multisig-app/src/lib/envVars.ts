@@ -1,9 +1,9 @@
-import * as Schema from 'effect/Schema'
-import * as Either from 'effect/Either'
-import { pipe } from 'effect'
-import { TreeFormatter } from 'effect/ParseResult'
+import * as Schema from "effect/Schema";
+import * as Either from "effect/Either";
+import { pipe } from "effect";
+import { TreeFormatter } from "effect/ParseResult";
 
-class EnvVars extends Schema.Class<EnvVars>('EnvVars')({
+class EnvVars extends Schema.Class<EnvVars>("EnvVars")({
   NETWORK_ID: Schema.NumberFromString,
   DAPP_DEFINITION_ADDRESS: Schema.String,
   ORCHESTRATOR_URL: Schema.String,
@@ -19,7 +19,7 @@ export const envVars = pipe(
   Schema.decodeUnknownEither(EnvVars),
   Either.getOrElse((parseIssue) => {
     throw new Error(
-      `Invalid environment variables: ${TreeFormatter.formatErrorSync(parseIssue)}`,
-    )
-  }),
-)
+      `Invalid environment variables: ${TreeFormatter.formatErrorSync(parseIssue)}`
+    );
+  })
+);

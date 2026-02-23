@@ -1,19 +1,28 @@
 mod gateway;
+mod proposal_store;
+mod transaction_builder;
 
 use std::sync::Arc;
 
-use axum::{extract::State, http::Method, routing::get, Json, Router};
+use axum::{
+    extract::{Path, State},
+    http::Method,
+    routing::{get, post},
+    Json, Router,
+};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
 use crate::gateway::GatewayClient;
+use crate::proposal_store::{CreateProposal, Proposal, ProposalStore};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: sqlx::PgPool,
+    pub proposal_store: Arc<ProposalStore>,
     pub gateway: Arc<GatewayClient>,
     pub multisig_account: String,
+    pub network_id: u8,
 }
 
 #[derive(serde::Serialize)]
@@ -42,6 +51,113 @@ async fn access_rule(
         })
 }
 
+// --- Proposal endpoints ---
+
+#[derive(serde::Deserialize)]
+struct CreateProposalRequest {
+    manifest_text: String,
+    expiry_epoch: u64,
+}
+
+async fn create_proposal(
+    State(state): State<AppState>,
+    Json(req): Json<CreateProposalRequest>,
+) -> Result<Json<Proposal>, (axum::http::StatusCode, String)> {
+    // Get current epoch to set epoch_min
+    let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
+        tracing::error!("Failed to get current epoch: {e}");
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get current epoch: {e}"),
+        )
+    })?;
+
+    let epoch_min = current_epoch;
+    let epoch_max = req.expiry_epoch;
+
+    if epoch_max <= epoch_min {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Expiry epoch ({epoch_max}) must be greater than current epoch ({epoch_min})"),
+        ));
+    }
+
+    // Build the unsigned subintent
+    let subintent_result = transaction_builder::build_unsigned_subintent(
+        &req.manifest_text,
+        state.network_id,
+        epoch_min,
+        epoch_max,
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to build subintent: {e}");
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Failed to build subintent: {e}"),
+        )
+    })?;
+
+    // Store the proposal
+    let proposal = state
+        .proposal_store
+        .create(CreateProposal {
+            manifest_text: req.manifest_text,
+            treasury_account: None,
+            epoch_min: epoch_min as i64,
+            epoch_max: epoch_max as i64,
+            subintent_hash: subintent_result.subintent_hash,
+            intent_discriminator: subintent_result.intent_discriminator as i64,
+            partial_transaction_bytes: subintent_result.partial_transaction_bytes,
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create proposal: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create proposal: {e}"),
+            )
+        })?;
+
+    Ok(Json(proposal))
+}
+
+async fn list_proposals(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Proposal>>, (axum::http::StatusCode, String)> {
+    state.proposal_store.list().await.map(Json).map_err(|e| {
+        tracing::error!("Failed to list proposals: {e}");
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list proposals: {e}"),
+        )
+    })
+}
+
+async fn get_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<Proposal>, (axum::http::StatusCode, String)> {
+    let proposal = state
+        .proposal_store
+        .get(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get proposal: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get proposal: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                "Proposal not found".to_string(),
+            )
+        })?;
+
+    Ok(Json(proposal))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -58,6 +174,10 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("MULTISIG_ACCOUNT_ADDRESS").expect("MULTISIG_ACCOUNT_ADDRESS must be set");
     let frontend_origin =
         std::env::var("FRONTEND_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".into());
+    let network_id: u8 = std::env::var("NETWORK_ID")
+        .unwrap_or_else(|_| "2".into())
+        .parse()
+        .expect("NETWORK_ID must be a valid u8");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -68,11 +188,13 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Database migrations applied");
 
     let gateway = Arc::new(GatewayClient::new(gateway_url));
+    let proposal_store = Arc::new(ProposalStore::new(pool));
 
     let state = AppState {
-        pool,
+        proposal_store,
         gateway,
         multisig_account,
+        network_id,
     };
 
     let cors = CorsLayer::new()
@@ -87,6 +209,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/account/access-rule", get(access_rule))
+        .route("/proposals", post(create_proposal).get(list_proposals))
+        .route("/proposals/{id}", get(get_proposal))
         .layer(cors)
         .with_state(state);
 

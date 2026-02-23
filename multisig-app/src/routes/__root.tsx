@@ -1,36 +1,36 @@
-import { RegistryProvider } from '@effect-atom/atom-react'
+import { RegistryProvider } from "@effect-atom/atom-react";
 import {
   createRootRoute,
   HeadContent,
   Link,
   Outlet,
   Scripts,
-} from '@tanstack/react-router'
-import { Toaster } from 'sonner'
-import { ClientOnly } from '@/lib/ClientOnly'
-import appCss from '../styles.css?url'
+} from "@tanstack/react-router";
+import { Toaster } from "sonner";
+import { ClientOnly } from "@/lib/ClientOnly";
+import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Multisig Orchestrator' },
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "Multisig Orchestrator" },
     ],
     links: [
-      { rel: 'stylesheet', href: appCss },
-      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      { rel: "stylesheet", href: appCss },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
-        rel: 'preconnect',
-        href: 'https://fonts.gstatic.com',
-        crossOrigin: 'anonymous',
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
       },
     ],
   }),
   shellComponent: RootDocument,
   component: RootComponent,
   notFoundComponent: NotFound,
-})
+});
 
 function NotFound() {
   return (
@@ -40,7 +40,7 @@ function NotFound() {
         <p className="text-muted-foreground">Page not found</p>
       </div>
     </div>
-  )
+  );
 }
 
 function RootComponent() {
@@ -62,7 +62,7 @@ function RootComponent() {
         </footer>
       </div>
     </RegistryProvider>
-  )
+  );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
@@ -76,5 +76,5 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
-  )
+  );
 }

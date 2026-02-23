@@ -39,8 +39,57 @@ account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp (3-of-4, c
 - Public keys will be recovered when signers connect wallets or sign (Issue 3)
 - The .env file for the frontend is gitignored; copy .env.example for backend config
 
-## Issue 2: Create & view proposals
-Status: Not started
+## Issue 2: Create & view proposals ✅
+Completed: 2026-02-23
+
+### What was built
+
+**Database:**
+- `proposals` table migration (002_proposals.sql): id, manifest_text, treasury_account, epoch_min/max, status (enum with 8 states), subintent_hash, intent_discriminator, partial_transaction_bytes, created_at, submitted_at, tx_id
+- Indexes on status and created_at
+
+**Backend (multisig-server/):**
+- Added Radix SDK deps: radix-common 1.3, radix-transactions 1.3, rand, hex
+- ProposalStore module — PostgreSQL-backed CRUD with state machine:
+  - create(), get(id), list(), transition_status(id, from, to)
+  - ProposalStatus enum with validated transitions: Created→Signing→Ready→Submitting→Committed|Failed, plus →Expired/→Invalid from active states
+  - Runtime-checked queries (sqlx::query_as with FromRow) — no compile-time DB dependency
+- TransactionBuilder module — builds unsigned subintents from raw manifest text:
+  - build_unsigned_subintent(manifest_text, network_id, epoch_min, epoch_max) using Radix SDK
+  - Compiles RTM string to SubintentManifestV2 via radix_transactions::manifest::compiler
+  - Appends YIELD_TO_PARENT automatically if not present
+  - Cryptographically random intent_discriminator (rand::thread_rng)
+  - Returns bech32-encoded SubintentHash (subtxid_...) + serialized PartialTransactionV2 bytes
+  - Deterministic variant for testing with explicit discriminator
+- API endpoints:
+  - POST /proposals — accepts { manifest_text, expiry_epoch }, fetches current epoch from Gateway, builds unsigned subintent, stores in DB
+  - GET /proposals — list all proposals ordered by created_at DESC
+  - GET /proposals/:id — full proposal detail
+- New env var: NETWORK_ID (default: 2 for Stokenet)
+- AppState refactored: pool replaced with Arc<ProposalStore>, added network_id
+- Unit tests: 4 state machine tests + 5 transaction builder tests (offline, deterministic)
+
+**Frontend (multisig-app/):**
+- OrchestratorClient — added createProposal(), listProposals(), getProposal(id) with Effect Schema validation
+- ProposalSchema for API response parsing (id, manifest_text, status, epoch range, subintent_hash, etc.)
+- Proposal atoms (proposalAtoms.ts): proposalListAtom, createProposalAtom (with list refresh), makeProposalDetailAtom(id)
+- Home page updated:
+  - "New Proposal" button linking to /proposals/new
+  - Proposal list section with status badges (color-coded by state), epoch range, created date
+  - Links to proposal detail pages
+- Create Proposal page (/proposals/new):
+  - Textarea for raw RTM manifest text
+  - Epoch expiry input
+  - Form validation + error display
+  - On success: redirects to proposal detail page
+- Proposal Detail page (/proposals/$id):
+  - Status badge, UUID, metadata grid (created date, epoch window, subintent hash)
+  - Full manifest text display in monospace code block
+
+### Tests
+- 13 unit tests pass (4 gateway + 4 proposal store state machine + 5 transaction builder)
+- 2 integration tests (#[ignore]) for live Stokenet
+- Frontend TypeScript types pass with no errors
 
 ## Issue 3: Collect signatures
 Status: Not started

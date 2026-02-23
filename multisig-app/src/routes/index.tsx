@@ -1,34 +1,44 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Result, useAtomValue, useAtomMount } from '@effect-atom/atom-react'
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Result, useAtomValue, useAtomMount } from "@effect-atom/atom-react";
 import {
   accessRuleAtom,
   walletDataAtom,
   dappToolkitAtom,
-} from '@/atom/accessRuleAtom'
-import { envVars } from '@/lib/envVars'
-import { ClientOnly } from '@/lib/ClientOnly'
-import type { SignerInfo } from '@/atom/orchestratorClient'
+} from "@/atom/accessRuleAtom";
+import { proposalListAtom } from "@/atom/proposalAtoms";
+import { envVars } from "@/lib/envVars";
+import { ClientOnly } from "@/lib/ClientOnly";
+import type { Proposal, SignerInfo } from "@/atom/orchestratorClient";
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: HomePage,
-})
+});
 
 function HomePage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Multisig Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          View the multisig account's access rule and signer configuration.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Multisig Dashboard
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage proposals and view the multisig account configuration.
+          </p>
+        </div>
+        <Link
+          to="/proposals/new"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors"
+        >
+          New Proposal
+        </Link>
       </div>
 
       <ClientOnly
         fallback={
           <>
             <WalletStatusSkeleton />
+            <ProposalListSkeleton />
             <AccessRuleSkeleton />
           </>
         }
@@ -36,17 +46,138 @@ function HomePage() {
         {() => <HomePageClient />}
       </ClientOnly>
     </div>
-  )
+  );
 }
 
 function HomePageClient() {
-  useAtomMount(dappToolkitAtom)
+  useAtomMount(dappToolkitAtom);
   return (
     <>
       <WalletStatus />
+      <ProposalList />
       <AccessRuleDisplay />
     </>
-  )
+  );
+}
+
+// --- Proposal List ---
+
+function ProposalListSkeleton() {
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        Proposals
+      </h2>
+      <div className="space-y-3">
+        <div className="h-12 w-full bg-muted rounded animate-pulse" />
+        <div className="h-12 w-full bg-muted rounded animate-pulse" />
+      </div>
+    </section>
+  );
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  created: "bg-blue-500/20 text-blue-400",
+  signing: "bg-yellow-500/20 text-yellow-400",
+  ready: "bg-green-500/20 text-green-400",
+  submitting: "bg-purple-500/20 text-purple-400",
+  committed: "bg-emerald-500/20 text-emerald-400",
+  failed: "bg-red-500/20 text-red-400",
+  expired: "bg-gray-500/20 text-gray-400",
+  invalid: "bg-red-500/20 text-red-400",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const colors = STATUS_COLORS[status] ?? "bg-gray-500/20 text-gray-400";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function ProposalList() {
+  const proposalsResult = useAtomValue(proposalListAtom);
+
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        Proposals
+      </h2>
+      {Result.builder(proposalsResult)
+        .onInitial(() => (
+          <div className="space-y-3">
+            <div className="h-12 w-full bg-muted rounded animate-pulse" />
+            <div className="h-12 w-full bg-muted rounded animate-pulse" />
+          </div>
+        ))
+        .onSuccess((proposals) => {
+          if (proposals.length === 0) {
+            return (
+              <p className="text-muted-foreground text-sm">
+                No proposals yet.{" "}
+                <Link
+                  to="/proposals/new"
+                  className="text-accent hover:underline"
+                >
+                  Create one
+                </Link>
+              </p>
+            );
+          }
+          return (
+            <div className="divide-y divide-border">
+              {proposals.map((proposal) => (
+                <ProposalRow key={proposal.id} proposal={proposal} />
+              ))}
+            </div>
+          );
+        })
+        .onFailure((error) => (
+          <div className="text-red-400 text-sm">
+            <p>Failed to load proposals.</p>
+            <p className="text-xs mt-1 text-muted-foreground">
+              {String(error)}
+            </p>
+          </div>
+        ))
+        .render()}
+    </section>
+  );
+}
+
+function ProposalRow({ proposal }: { proposal: Proposal }) {
+  const created = new Date(proposal.created_at).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <Link
+      to="/proposals/$id"
+      params={{ id: proposal.id }}
+      className="flex items-center justify-between py-3 hover:bg-muted/30 -mx-2 px-2 rounded transition-colors"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <StatusBadge status={proposal.status} />
+        <div className="min-w-0">
+          <code className="text-sm font-mono truncate block">
+            {proposal.id.slice(0, 8)}...
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Epochs {proposal.epoch_min}–{proposal.epoch_max}
+          </p>
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
+        {created}
+      </span>
+    </Link>
+  );
 }
 
 function WalletStatusSkeleton() {
@@ -57,7 +188,7 @@ function WalletStatusSkeleton() {
       </h2>
       <p className="text-muted-foreground">Connecting to wallet...</p>
     </section>
-  )
+  );
 }
 
 function AccessRuleSkeleton() {
@@ -72,11 +203,11 @@ function AccessRuleSkeleton() {
         <div className="h-4 w-full bg-muted rounded animate-pulse" />
       </div>
     </section>
-  )
+  );
 }
 
 function WalletStatus() {
-  const walletResult = useAtomValue(walletDataAtom)
+  const walletResult = useAtomValue(walletDataAtom);
 
   return (
     <section className="border border-border rounded-lg p-6 bg-card">
@@ -88,14 +219,14 @@ function WalletStatus() {
           <p className="text-muted-foreground">Connecting to wallet...</p>
         ))
         .onSuccess((walletData) => {
-          if (!walletData) return null
-          const accounts = walletData.accounts ?? []
+          if (!walletData) return null;
+          const accounts = walletData.accounts ?? [];
           if (accounts.length === 0) {
             return (
               <p className="text-muted-foreground">
                 No accounts connected. Click the connect button above.
               </p>
-            )
+            );
           }
           return (
             <div className="space-y-2">
@@ -112,7 +243,7 @@ function WalletStatus() {
                 </div>
               ))}
             </div>
-          )
+          );
         })
         .onFailure(() => (
           <p className="text-muted-foreground">
@@ -121,11 +252,11 @@ function WalletStatus() {
         ))
         .render()}
     </section>
-  )
+  );
 }
 
 function AccessRuleDisplay() {
-  const accessRuleResult = useAtomValue(accessRuleAtom)
+  const accessRuleResult = useAtomValue(accessRuleAtom);
 
   return (
     <section className="border border-border rounded-lg p-6 bg-card">
@@ -135,7 +266,7 @@ function AccessRuleDisplay() {
       <p className="text-xs text-muted-foreground mb-4 font-mono">
         {envVars.DAPP_DEFINITION_ADDRESS
           ? `Account: ${envVars.DAPP_DEFINITION_ADDRESS.slice(0, 20)}...`
-          : 'Account not configured'}
+          : "Account not configured"}
       </p>
 
       {Result.builder(accessRuleResult)
@@ -181,16 +312,10 @@ function AccessRuleDisplay() {
         ))
         .render()}
     </section>
-  )
+  );
 }
 
-function SignerRow({
-  signer,
-  index,
-}: {
-  signer: SignerInfo
-  index: number
-}) {
+function SignerRow({ signer, index }: { signer: SignerInfo; index: number }) {
   return (
     <div className="py-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -208,5 +333,5 @@ function SignerRow({
         {signer.badge_local_id}
       </code>
     </div>
-  )
+  );
 }
