@@ -151,6 +151,11 @@ function ProposalContent({
         </code>
       </div>
 
+      {/* Validity warning banner */}
+      {(proposal.status === "expired" || proposal.status === "invalid") && (
+        <ValidityWarning proposal={proposal} />
+      )}
+
       {/* Metadata grid */}
       <div className="grid grid-cols-2 gap-4">
         <MetadataField label="Created" value={created} />
@@ -311,21 +316,39 @@ function SignatureStatusDisplay({
 }
 
 function SignerStatusRow({ signer }: { signer: SignerStatus }) {
+  const invalidated = signer.has_signed && !signer.is_valid;
+
   return (
-    <div className="py-2.5 flex items-center justify-between">
+    <div
+      className={`py-2.5 flex items-center justify-between ${invalidated ? "opacity-60" : ""}`}
+    >
       <div className="flex items-center gap-3">
         <div
-          className={`w-2 h-2 rounded-full ${signer.has_signed ? "bg-green-400" : "bg-muted-foreground/30"}`}
+          className={`w-2 h-2 rounded-full ${
+            invalidated
+              ? "bg-red-400"
+              : signer.has_signed
+                ? "bg-green-400"
+                : "bg-muted-foreground/30"
+          }`}
         />
-        <code className="text-sm font-mono">
+        <code
+          className={`text-sm font-mono ${invalidated ? "line-through" : ""}`}
+        >
           {signer.key_hash.slice(0, 12)}...{signer.key_hash.slice(-8)}
         </code>
         <span className="text-xs text-muted-foreground">{signer.key_type}</span>
       </div>
       <span
-        className={`text-xs font-medium ${signer.has_signed ? "text-green-400" : "text-muted-foreground"}`}
+        className={`text-xs font-medium ${
+          invalidated
+            ? "text-red-400"
+            : signer.has_signed
+              ? "text-green-400"
+              : "text-muted-foreground"
+        }`}
       >
-        {signer.has_signed ? "Signed" : "Pending"}
+        {invalidated ? "Invalidated" : signer.has_signed ? "Signed" : "Pending"}
       </span>
     </div>
   );
@@ -607,6 +630,31 @@ function TransactionResult({ proposal }: { proposal: Proposal }) {
             dateStyle: "medium",
             timeStyle: "short",
           })}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ValidityWarning({ proposal }: { proposal: Proposal }) {
+  const isExpired = proposal.status === "expired";
+
+  return (
+    <section
+      className={`border rounded-lg p-4 ${
+        isExpired
+          ? "border-gray-500/30 bg-gray-500/5"
+          : "border-red-500/30 bg-red-500/5"
+      }`}
+    >
+      <p
+        className={`text-sm font-medium ${isExpired ? "text-gray-400" : "text-red-400"}`}
+      >
+        {isExpired ? "Proposal Expired" : "Proposal Invalid"}
+      </p>
+      {proposal.invalid_reason && (
+        <p className="text-xs text-muted-foreground mt-1">
+          {proposal.invalid_reason}
         </p>
       )}
     </section>

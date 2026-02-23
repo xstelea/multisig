@@ -2,6 +2,7 @@ mod gateway;
 mod proposal_store;
 mod signature_collector;
 mod transaction_builder;
+mod validity_monitor;
 
 use std::sync::Arc;
 
@@ -552,6 +553,10 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "2".into())
         .parse()
         .expect("NETWORK_ID must be a valid u8");
+    let monitor_interval_secs: u64 = std::env::var("MONITOR_INTERVAL_SECS")
+        .unwrap_or_else(|_| "30".into())
+        .parse()
+        .expect("MONITOR_INTERVAL_SECS must be a valid u64");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -572,6 +577,15 @@ async fn main() -> anyhow::Result<()> {
         multisig_account,
         network_id,
     };
+
+    // Spawn validity monitor background task
+    tokio::spawn(validity_monitor::run(
+        state.proposal_store.clone(),
+        state.gateway.clone(),
+        state.multisig_account.clone(),
+        monitor_interval_secs,
+    ));
+    tracing::info!("Validity monitor started (interval: {monitor_interval_secs}s)");
 
     let cors = CorsLayer::new()
         .allow_origin(

@@ -19,6 +19,7 @@ pub struct Signature {
     pub signature_bytes: Vec<u8>,
     pub signed_partial_transaction_hex: String,
     pub created_at: DateTime<Utc>,
+    pub is_valid: bool,
 }
 
 /// Summary of signature collection progress.
@@ -39,12 +40,13 @@ pub struct SignatureSummary {
     pub created_at: DateTime<Utc>,
 }
 
-/// Per-signer status: have they signed or not?
+/// Per-signer status: have they signed or not, and is their signature still valid?
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignerStatus {
     pub key_hash: String,
     pub key_type: String,
     pub has_signed: bool,
+    pub is_valid: bool,
 }
 
 pub struct SignatureCollector {
@@ -226,18 +228,26 @@ impl SignatureCollector {
     ) -> Result<SignatureStatus> {
         let signatures = self.list_signatures(proposal_id).await?;
 
-        let signed_hashes: std::collections::HashSet<&str> = signatures
+        // Build a map of key_hash → (has_signed, is_valid)
+        let sig_map: std::collections::HashMap<&str, bool> = signatures
             .iter()
-            .map(|s| s.signer_key_hash.as_str())
+            .map(|s| (s.signer_key_hash.as_str(), s.is_valid))
             .collect();
 
         let signers: Vec<SignerStatus> = access_rule
             .signers
             .iter()
-            .map(|s| SignerStatus {
-                key_hash: s.key_hash.clone(),
-                key_type: s.key_type.clone(),
-                has_signed: signed_hashes.contains(s.key_hash.as_str()),
+            .map(|s| {
+                let (has_signed, is_valid) = match sig_map.get(s.key_hash.as_str()) {
+                    Some(&valid) => (true, valid),
+                    None => (false, true), // Not signed yet, validity N/A
+                };
+                SignerStatus {
+                    key_hash: s.key_hash.clone(),
+                    key_type: s.key_type.clone(),
+                    has_signed,
+                    is_valid,
+                }
             })
             .collect();
 
@@ -280,7 +290,7 @@ impl SignatureCollector {
         let rows = sqlx::query_as::<_, Signature>(
             r#"
             SELECT id, proposal_id, signer_public_key, signer_key_hash, signature_bytes,
-                   signed_partial_transaction_hex, created_at
+                   signed_partial_transaction_hex, created_at, is_valid
             FROM signatures
             WHERE proposal_id = $1
             ORDER BY created_at ASC

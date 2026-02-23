@@ -34,6 +34,7 @@ export const ProposalSchema = Schema.Struct({
   created_at: Schema.String,
   submitted_at: Schema.NullOr(Schema.String),
   tx_id: Schema.NullOr(Schema.String),
+  invalid_reason: Schema.NullOr(Schema.String),
 });
 export type Proposal = typeof ProposalSchema.Type;
 
@@ -41,6 +42,7 @@ export const SignerStatusSchema = Schema.Struct({
   key_hash: Schema.String,
   key_type: Schema.String,
   has_signed: Schema.Boolean,
+  is_valid: Schema.Boolean,
 });
 export type SignerStatus = typeof SignerStatusSchema.Type;
 

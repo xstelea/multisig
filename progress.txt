@@ -182,5 +182,42 @@ Completed: 2026-02-23
 - 5 new transaction builder tests: reconstruct_signed_partial, compose_main_transaction valid output, different discriminators, build_fee_manifest, reconstruct rejects wrong key
 - Frontend TypeScript types pass cleanly
 
-## Issue 5: Validity monitoring
-Status: Not started
+## Issue 5: Validity monitoring ✅
+Completed: 2026-02-23
+
+### What was built
+
+**Database:**
+- Migration (005_validity_monitoring.sql): `invalid_reason` TEXT column on proposals, `is_valid` BOOLEAN column on signatures (default TRUE)
+
+**Backend (multisig-server/):**
+- ValidityMonitor module (validity_monitor.rs) — background task using tokio::spawn + tokio::time::interval:
+  - Phase 1: Epoch expiry detection — checks current_epoch >= epoch_max → marks Expired
+  - Phase 2: Access rule change detection — re-fetches access rule, compares against signers who've signed, flags invalid signatures, marks Invalid if remaining valid sigs < threshold
+  - Configurable interval via MONITOR_INTERVAL_SECS env var (default: 30s)
+  - Batched design: epoch check first (one Gateway call), access rule check only if proposals have signatures
+- ProposalStore — 5 new methods:
+  - list_active() — fetch proposals in Created/Signing/Ready status
+  - mark_expired(id) — transition to Expired with reason
+  - mark_invalid(id, reason) — transition to Invalid with reason
+  - invalidate_signature(proposal_id, signer_key_hash) — flag individual signature as invalid
+  - count_valid_signatures(proposal_id) — count only valid signatures
+  - get_signature_key_hashes(proposal_id) — returns (key_hash, is_valid) pairs
+- Proposal struct — added invalid_reason field, included in all SQL queries
+- SignerStatus — added is_valid field for per-signer validity tracking
+- Signature struct — added is_valid field from DB
+- get_signature_status() — returns is_valid per signer (maps signed signatures to their validity flag)
+- main.rs — spawns validity monitor background task before axum::serve
+
+**Frontend (multisig-app/):**
+- ProposalSchema — added invalid_reason: NullOr(String)
+- SignerStatusSchema — added is_valid: Boolean
+- Proposal detail page:
+  - ValidityWarning component: warning banner for Expired (gray) and Invalid (red) proposals with reason text
+  - SignerStatusRow updated: invalidated signatures shown with red dot, strikethrough key hash, "Invalidated" label, reduced opacity
+- Status badges for expired/invalid already existed from Issue 1
+
+### Tests
+- 31 unit tests pass (4 gateway + 4 proposal store + 10 transaction builder + 10 signature collector + 3 validity monitor)
+- 3 new validity monitor tests: epoch expiry detection, access rule signer removal detection, threshold check with invalidated sigs
+- Frontend TypeScript types pass cleanly

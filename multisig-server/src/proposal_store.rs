@@ -51,6 +51,7 @@ pub struct Proposal {
     pub created_at: DateTime<Utc>,
     pub submitted_at: Option<DateTime<Utc>>,
     pub tx_id: Option<String>,
+    pub invalid_reason: Option<String>,
 }
 
 pub struct CreateProposal {
@@ -78,7 +79,8 @@ impl ProposalStore {
             INSERT INTO proposals (manifest_text, treasury_account, epoch_min, epoch_max, subintent_hash, intent_discriminator, partial_transaction_bytes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id, manifest_text, treasury_account, epoch_min, epoch_max,
-                      status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id
+                      status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
+                      invalid_reason
             "#,
         )
         .bind(&input.manifest_text)
@@ -98,7 +100,8 @@ impl ProposalStore {
         let row = sqlx::query_as::<_, Proposal>(
             r#"
             SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
-                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id
+                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
+                   invalid_reason
             FROM proposals
             WHERE id = $1
             "#,
@@ -114,7 +117,8 @@ impl ProposalStore {
         let rows = sqlx::query_as::<_, Proposal>(
             r#"
             SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
-                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id
+                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
+                   invalid_reason
             FROM proposals
             ORDER BY created_at DESC
             "#,
@@ -177,6 +181,101 @@ impl ProposalStore {
         .await?;
 
         Ok(())
+    }
+
+    /// List proposals in active states (Created, Signing, Ready) for validity monitoring.
+    pub async fn list_active(&self) -> Result<Vec<Proposal>> {
+        let rows = sqlx::query_as::<_, Proposal>(
+            r#"
+            SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
+                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
+                   invalid_reason
+            FROM proposals
+            WHERE status IN ('created', 'signing', 'ready')
+            ORDER BY created_at ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Mark a proposal as expired (epoch window passed).
+    pub async fn mark_expired(&self, id: Uuid) -> Result<()> {
+        let result = sqlx::query(
+            "UPDATE proposals SET status = 'expired', invalid_reason = 'Proposal epoch window has passed' WHERE id = $1 AND status IN ('created', 'signing', 'ready')",
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!(
+                "Proposal {id} not found or not in an active status"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Mark a proposal as invalid with a reason (e.g. access rule changed).
+    pub async fn mark_invalid(&self, id: Uuid, reason: &str) -> Result<()> {
+        let result = sqlx::query(
+            "UPDATE proposals SET status = 'invalid', invalid_reason = $1 WHERE id = $2 AND status IN ('created', 'signing', 'ready')",
+        )
+        .bind(reason)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow!(
+                "Proposal {id} not found or not in an active status"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Flag a signature as invalid (signer removed from access rule).
+    pub async fn invalidate_signature(
+        &self,
+        proposal_id: Uuid,
+        signer_key_hash: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE signatures SET is_valid = FALSE WHERE proposal_id = $1 AND signer_key_hash = $2",
+        )
+        .bind(proposal_id)
+        .bind(signer_key_hash)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get (key_hash, is_valid) pairs for all signatures on a proposal.
+    pub async fn get_signature_key_hashes(&self, proposal_id: Uuid) -> Result<Vec<(String, bool)>> {
+        let rows: Vec<(String, bool)> = sqlx::query_as(
+            "SELECT signer_key_hash, is_valid FROM signatures WHERE proposal_id = $1",
+        )
+        .bind(proposal_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Count valid signatures for a proposal.
+    pub async fn count_valid_signatures(&self, proposal_id: Uuid) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM signatures WHERE proposal_id = $1 AND is_valid = TRUE",
+        )
+        .bind(proposal_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
     }
 
     pub async fn transition_status(
