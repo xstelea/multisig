@@ -7,6 +7,7 @@ import {
   Scripts,
 } from '@tanstack/react-router'
 import { Toaster } from 'sonner'
+import { ClientOnly } from '@/lib/ClientOnly'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -51,7 +52,7 @@ function RootComponent() {
           <Link to="/" className="text-lg font-semibold tracking-tight">
             Multisig Orchestrator
           </Link>
-          <radix-connect-button />
+          <ClientOnly>{() => <radix-connect-button />}</ClientOnly>
         </header>
         <main className="flex-grow w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Outlet />

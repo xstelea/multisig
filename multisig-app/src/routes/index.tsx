@@ -6,6 +6,7 @@ import {
   dappToolkitAtom,
 } from '@/atom/accessRuleAtom'
 import { envVars } from '@/lib/envVars'
+import { ClientOnly } from '@/lib/ClientOnly'
 import type { SignerInfo } from '@/atom/orchestratorClient'
 
 export const Route = createFileRoute('/')({
@@ -13,8 +14,6 @@ export const Route = createFileRoute('/')({
 })
 
 function HomePage() {
-  useAtomMount(dappToolkitAtom)
-
   return (
     <div className="space-y-8">
       <div>
@@ -26,9 +25,53 @@ function HomePage() {
         </p>
       </div>
 
+      <ClientOnly
+        fallback={
+          <>
+            <WalletStatusSkeleton />
+            <AccessRuleSkeleton />
+          </>
+        }
+      >
+        {() => <HomePageClient />}
+      </ClientOnly>
+    </div>
+  )
+}
+
+function HomePageClient() {
+  useAtomMount(dappToolkitAtom)
+  return (
+    <>
       <WalletStatus />
       <AccessRuleDisplay />
-    </div>
+    </>
+  )
+}
+
+function WalletStatusSkeleton() {
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        Connected Wallet
+      </h2>
+      <p className="text-muted-foreground">Connecting to wallet...</p>
+    </section>
+  )
+}
+
+function AccessRuleSkeleton() {
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">
+        Multisig Access Rule
+      </h2>
+      <div className="mt-4 space-y-3">
+        <div className="h-6 w-48 bg-muted rounded animate-pulse" />
+        <div className="h-4 w-full bg-muted rounded animate-pulse" />
+        <div className="h-4 w-full bg-muted rounded animate-pulse" />
+      </div>
+    </section>
   )
 }
 
