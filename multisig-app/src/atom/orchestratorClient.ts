@@ -37,6 +37,30 @@ export const ProposalSchema = Schema.Struct({
 });
 export type Proposal = typeof ProposalSchema.Type;
 
+export const SignerStatusSchema = Schema.Struct({
+  key_hash: Schema.String,
+  key_type: Schema.String,
+  has_signed: Schema.Boolean,
+});
+export type SignerStatus = typeof SignerStatusSchema.Type;
+
+export const SignatureSummarySchema = Schema.Struct({
+  signer_public_key: Schema.String,
+  signer_key_hash: Schema.String,
+  created_at: Schema.String,
+});
+export type SignatureSummary = typeof SignatureSummarySchema.Type;
+
+export const SignatureStatusSchema = Schema.Struct({
+  proposal_id: Schema.String,
+  signatures: Schema.Array(SignatureSummarySchema),
+  threshold: Schema.Number,
+  collected: Schema.Number,
+  remaining: Schema.Number,
+  signers: Schema.Array(SignerStatusSchema),
+});
+export type SignatureStatusType = typeof SignatureStatusSchema.Type;
+
 // --- Service definition ---
 
 export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
@@ -50,6 +74,13 @@ export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
     }) => Effect.Effect<Proposal, Error>;
     readonly listProposals: () => Effect.Effect<ReadonlyArray<Proposal>, Error>;
     readonly getProposal: (id: string) => Effect.Effect<Proposal, Error>;
+    readonly signProposal: (
+      id: string,
+      signedPartialTransactionHex: string
+    ) => Effect.Effect<SignatureStatusType, Error>;
+    readonly getSignatureStatus: (
+      id: string
+    ) => Effect.Effect<SignatureStatusType, Error>;
   }
 >() {}
 
@@ -109,6 +140,30 @@ const OrchestratorClientLive = Layer.effect(
           .pipe(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(ProposalSchema)),
+            Effect.scoped,
+            Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+          ),
+
+      signProposal: (id: string, signedPartialTransactionHex: string) =>
+        HttpClientRequest.post(`${baseUrl}/proposals/${id}/sign`).pipe(
+          HttpClientRequest.bodyJson({
+            signed_partial_transaction_hex: signedPartialTransactionHex,
+          }),
+          Effect.flatMap((req) => client.execute(req)),
+          Effect.flatMap((res) => res.json),
+          Effect.flatMap(Schema.decodeUnknown(SignatureStatusSchema)),
+          Effect.scoped,
+          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+        ),
+
+      getSignatureStatus: (id: string) =>
+        client
+          .execute(
+            HttpClientRequest.get(`${baseUrl}/proposals/${id}/signatures`)
+          )
+          .pipe(
+            Effect.flatMap((res) => res.json),
+            Effect.flatMap(Schema.decodeUnknown(SignatureStatusSchema)),
             Effect.scoped,
             Effect.catchAll((e) => Effect.fail(new Error(String(e))))
           ),

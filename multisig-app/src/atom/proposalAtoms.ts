@@ -31,3 +31,30 @@ export const makeProposalDetailAtom = (id: string) =>
       return yield* client.getProposal(id);
     })
   );
+
+export const makeSignatureStatusAtom = (id: string) =>
+  runtime.atom(
+    Effect.gen(function* () {
+      const client = yield* OrchestratorClient;
+      return yield* client.getSignatureStatus(id);
+    })
+  );
+
+export const makeSignProposalAtom = (
+  proposalDetailAtom: ReturnType<typeof makeProposalDetailAtom>,
+  signatureStatusAtom: ReturnType<typeof makeSignatureStatusAtom>
+) =>
+  runtime.fn(
+    (input: { proposalId: string; signedPartialTransactionHex: string }, get) =>
+      Effect.gen(function* () {
+        const client = yield* OrchestratorClient;
+        const result = yield* client.signProposal(
+          input.proposalId,
+          input.signedPartialTransactionHex
+        );
+        get.refresh(proposalDetailAtom);
+        get.refresh(signatureStatusAtom);
+        get.refresh(proposalListAtom);
+        return result;
+      })
+  );

@@ -1,5 +1,6 @@
 mod gateway;
 mod proposal_store;
+mod signature_collector;
 mod transaction_builder;
 
 use std::sync::Arc;
@@ -16,10 +17,12 @@ use tracing_subscriber::EnvFilter;
 
 use crate::gateway::GatewayClient;
 use crate::proposal_store::{CreateProposal, Proposal, ProposalStore};
+use crate::signature_collector::{SignatureCollector, SignatureStatus};
 
 #[derive(Clone)]
 pub struct AppState {
     pub proposal_store: Arc<ProposalStore>,
+    pub signature_collector: Arc<SignatureCollector>,
     pub gateway: Arc<GatewayClient>,
     pub multisig_account: String,
     pub network_id: u8,
@@ -158,6 +161,88 @@ async fn get_proposal(
     Ok(Json(proposal))
 }
 
+// --- Signature endpoints ---
+
+#[derive(serde::Deserialize)]
+struct SignProposalRequest {
+    signed_partial_transaction_hex: String,
+}
+
+async fn sign_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+    Json(req): Json<SignProposalRequest>,
+) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, String)> {
+    // Fetch current access rule for validation
+    let access_rule = state
+        .gateway
+        .read_access_rule(&state.multisig_account)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read access rule: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read access rule: {e}"),
+            )
+        })?;
+
+    state
+        .signature_collector
+        .add_signature(
+            id,
+            &req.signed_partial_transaction_hex,
+            &access_rule,
+            &state.proposal_store,
+        )
+        .await
+        .map(Json)
+        .map_err(|e| {
+            let msg = e.to_string();
+            tracing::warn!("Sign proposal failed: {msg}");
+            let status = if msg.contains("not found") {
+                axum::http::StatusCode::NOT_FOUND
+            } else if msg.contains("not in the current access rule")
+                || msg.contains("already signed")
+                || msg.contains("status")
+            {
+                axum::http::StatusCode::BAD_REQUEST
+            } else {
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, msg)
+        })
+}
+
+async fn get_signature_status(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, String)> {
+    let access_rule = state
+        .gateway
+        .read_access_rule(&state.multisig_account)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read access rule: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read access rule: {e}"),
+            )
+        })?;
+
+    state
+        .signature_collector
+        .get_signature_status(id, &access_rule)
+        .await
+        .map(Json)
+        .map_err(|e| {
+            tracing::error!("Failed to get signature status: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get signature status: {e}"),
+            )
+        })
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -188,10 +273,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Database migrations applied");
 
     let gateway = Arc::new(GatewayClient::new(gateway_url));
-    let proposal_store = Arc::new(ProposalStore::new(pool));
+    let proposal_store = Arc::new(ProposalStore::new(pool.clone()));
+    let signature_collector = Arc::new(SignatureCollector::new(pool));
 
     let state = AppState {
         proposal_store,
+        signature_collector,
         gateway,
         multisig_account,
         network_id,
@@ -211,6 +298,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/account/access-rule", get(access_rule))
         .route("/proposals", post(create_proposal).get(list_proposals))
         .route("/proposals/{id}", get(get_proposal))
+        .route("/proposals/{id}/sign", post(sign_proposal))
+        .route("/proposals/{id}/signatures", get(get_signature_status))
         .layer(cors)
         .with_state(state);
 

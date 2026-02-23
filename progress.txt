@@ -91,8 +91,46 @@ Completed: 2026-02-23
 - 2 integration tests (#[ignore]) for live Stokenet
 - Frontend TypeScript types pass with no errors
 
-## Issue 3: Collect signatures
-Status: Not started
+## Issue 3: Collect signatures ✅
+Completed: 2026-02-23
+
+### What was built
+
+**Database:**
+- `signatures` table migration (003_signatures.sql): id, proposal_id (FK), signer_public_key, signer_key_hash, signature_bytes, signed_partial_transaction_hex, created_at
+- UNIQUE constraint on (proposal_id, signer_key_hash) to prevent duplicate signatures
+- Index on proposal_id for fast lookups
+
+**Backend (multisig-server/):**
+- SignatureCollector module (signature_collector.rs):
+  - `extract_signature_from_hex()` — decodes wallet's SignedPartialTransactionV2 hex, extracts Ed25519 signature + public key
+  - `compute_key_hash()` — Ed25519 public key → 29-byte Blake2b hash (matches Gateway API's NonFungibleGlobalId local_id format)
+  - `find_signer_by_hash()` — validates extracted key hash against access rule signers
+  - `SignatureCollector::add_signature()` — full validation pipeline: extract sig → compute hash → check access rule → check proposal state → store (UNIQUE prevents dupes) → state transitions
+  - `SignatureCollector::get_signature_status()` — returns threshold progress, per-signer signed/pending status
+  - State transitions: Created→Signing on first sig, Signing→Ready when threshold met
+- API endpoints:
+  - POST /proposals/{id}/sign — accepts { signed_partial_transaction_hex }, validates and stores signature
+  - GET /proposals/{id}/signatures — returns signature collection progress
+- 10 unit tests: key hash computation, signature extraction from real SDK-built signed partials, signer validation accept/reject
+
+**Frontend (multisig-app/):**
+- OrchestratorClient — added signProposal() and getSignatureStatus() with Effect Schema validation
+- Proposal atoms — makeSignatureStatusAtom(id), makeSignProposalAtom (calls sign + refreshes all related atoms)
+- Proposal detail page updated:
+  - Signature progress section with progress bar (collected/threshold)
+  - Per-signer list with green/gray dot indicators (Signed/Pending)
+  - Sign button using SubintentRequestBuilder → sendPreAuthorizationRequest → posts signed partial to backend
+  - Wallet connection state handling
+
+### Architecture notes
+- Each wallet sendPreAuthorizationRequest creates a NEW subintent with random discriminator — cannot get multiple signatures on same hash
+- Pragmatic solution: store each signer's full signed_partial_transaction_hex, extract only signature + public key for validation
+- Reconstruction of a single properly-signed subintent for the main transaction deferred to Issue 4
+
+### Tests
+- 23 unit tests pass (4 gateway + 4 proposal store + 5 transaction builder + 10 signature collector)
+- Frontend TypeScript types pass cleanly
 
 ## Issue 4: Submit transaction
 Status: Not started
