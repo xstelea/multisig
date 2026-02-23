@@ -1,0 +1,52 @@
+# Multisig Orchestrator — Implementation Progress
+
+## Issue 1: Project scaffolding + access rule display ✅
+Completed: 2026-02-23
+Commit: b2f686a
+
+### What was built
+
+**Backend (multisig-server/)**
+- Rust/axum HTTP server on configurable port
+- PostgreSQL connection pool (sqlx) + empty initial migration
+- CORS configuration for frontend origin
+- GatewayClient module:
+  - read_access_rule(account_address) — fetches from /state/entity/details, parses role_assignments.owner.rule
+  - get_current_epoch() — from /status/gateway-status
+  - Handles CountOf (N-of-M), Require (single signer), AllOf, AnyOf proof rules
+- GET /health endpoint
+- GET /account/access-rule endpoint returning { signers: [{ key_hash, key_type, badge_resource, badge_local_id }], threshold }
+- Config via env vars: PORT, DATABASE_URL, GATEWAY_URL, MULTISIG_ACCOUNT_ADDRESS, FRONTEND_ORIGIN
+- Unit tests: 4 tests for access rule parsing (CountOf, Require, AllowAll, DenyAll)
+- Integration tests: 2 #[ignore] tests against live Stokenet
+
+**Frontend (multisig-app/)**
+- TanStack Start + React 19 + Tailwind CSS v4
+- Effect runtime setup (Atom.context + global logger layer)
+- Radix dApp Toolkit initialization (connect button, network config)
+- OrchestratorClient Effect service (health, getAccessRule)
+- Home page displaying:
+  - Connected wallet state (reactive via RxJS→Effect stream bridge)
+  - Multisig account address
+  - Current signers with key hashes
+  - Required threshold (e.g. "3 of 4 signatures required")
+
+### Test multisig account
+account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp (3-of-4, created via POC)
+
+### Notes
+- Gateway API returns key HASHES (not raw public keys) in access rule NonFungibleGlobalId local_ids
+- Public keys will be recovered when signers connect wallets or sign (Issue 3)
+- The .env file for the frontend is gitignored; copy .env.example for backend config
+
+## Issue 2: Create & view proposals
+Status: Not started
+
+## Issue 3: Collect signatures
+Status: Not started
+
+## Issue 4: Submit transaction
+Status: Not started
+
+## Issue 5: Validity monitoring
+Status: Not started
