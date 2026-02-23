@@ -1,9 +1,22 @@
 //! Stokenet Gateway API client for transaction submission and status queries.
 
 use anyhow::{anyhow, Result};
+use radix_common::network::NetworkDefinition;
+use radix_transactions::prelude::{TransactionHashBech32Encoder, TransactionIntentHash};
 use serde::{Deserialize, Serialize};
 
-const STOKENET_GATEWAY: &str = "https://stokenet.radixdlt.com";
+const STOKENET_GATEWAY: &str = "https://babylon-stokenet-gateway.radixdlt.com";
+
+/// Encode a TransactionIntentHash to bech32m string for Gateway API calls.
+///
+/// The Gateway API expects intent hashes as bech32m (e.g., `txid_tdx_2_1...`),
+/// not raw hex.
+pub fn encode_intent_hash(hash: &TransactionIntentHash) -> Result<String> {
+    let encoder = TransactionHashBech32Encoder::new(&NetworkDefinition::stokenet());
+    encoder
+        .encode(hash)
+        .map_err(|e| anyhow!("Bech32m encode failed: {:?}", e))
+}
 
 /// Client for interacting with the Radix Gateway API on Stokenet.
 pub struct GatewayClient {
@@ -79,6 +92,28 @@ impl GatewayClient {
 
         let status: TransactionStatusResponse = response.json()?;
         Ok(status)
+    }
+
+    /// Get committed transaction details including receipt and state updates.
+    pub fn get_committed_details(&self, intent_hash: &str) -> Result<CommittedDetailsResponse> {
+        let response = self
+            .client
+            .post(format!("{}/transaction/committed-details", self.base_url))
+            .json(&serde_json::json!({
+                "intent_hash": intent_hash,
+                "opt_ins": {
+                    "receipt_state_changes": true
+                }
+            }))
+            .send()?;
+
+        if !response.status().is_success() {
+            let error_text = response.text()?;
+            return Err(anyhow!("Committed details failed: {}", error_text));
+        }
+
+        let details: CommittedDetailsResponse = response.json()?;
+        Ok(details)
     }
 
     /// Poll until transaction is committed or failed.
@@ -158,6 +193,61 @@ pub struct NetworkStatusResponse {
 pub struct LedgerState {
     pub epoch: u64,
     pub state_version: u64,
+}
+
+// ============================================================================
+// Committed details types
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct CommittedDetailsResponse {
+    pub transaction: TransactionDetails,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransactionDetails {
+    #[serde(default)]
+    pub receipt: Option<TransactionReceipt>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransactionReceipt {
+    pub status: String,
+    #[serde(default)]
+    pub state_updates: Option<StateUpdates>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StateUpdates {
+    #[serde(default)]
+    pub new_global_entities: Vec<NewGlobalEntity>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewGlobalEntity {
+    pub entity_type: String,
+    pub entity_address: String,
+}
+
+/// Extract the first GlobalAccount address from committed transaction details.
+pub fn extract_created_account_address(details: &CommittedDetailsResponse) -> Result<String> {
+    let receipt = details
+        .transaction
+        .receipt
+        .as_ref()
+        .ok_or_else(|| anyhow!("No receipt in committed details"))?;
+
+    let state_updates = receipt
+        .state_updates
+        .as_ref()
+        .ok_or_else(|| anyhow!("No state_updates in receipt"))?;
+
+    state_updates
+        .new_global_entities
+        .iter()
+        .find(|e| e.entity_type == "GlobalAccount")
+        .map(|e| e.entity_address.clone())
+        .ok_or_else(|| anyhow!("No GlobalAccount found in new_global_entities"))
 }
 
 #[cfg(test)]

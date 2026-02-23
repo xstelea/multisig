@@ -4,11 +4,14 @@
 //! that create Radix accounts with n-of-m multisig access rules using virtual signature badges.
 
 use anyhow::Result;
+use radix_common::address::AddressBech32Decoder;
+use radix_common::network::NetworkDefinition;
 use radix_common::prelude::*;
 use radix_engine_interface::prelude::*;
 use radix_transactions::prelude::*;
 
-use crate::keys::MultisigSigners;
+use crate::keys::{MultisigSigners, Signer};
+use crate::subintent::rand_intent_discriminator;
 
 /// Network ID for Stokenet testnet.
 pub const STOKENET_NETWORK_ID: u8 = 2;
@@ -168,6 +171,61 @@ pub fn build_create_multisig_account_transaction(
 /// Compile a notarized transaction to hex string for Gateway API submission.
 pub fn transaction_to_hex(raw: &RawNotarizedTransaction) -> String {
     hex::encode(raw.as_slice())
+}
+
+/// Build a faucet-funded transaction that deposits free XRD to a target account.
+///
+/// Uses Stokenet's built-in faucet for both fees and the XRD deposit (~10,000 XRD).
+/// The notary signs and notarizes the transaction.
+pub fn build_fund_from_faucet_transaction(
+    target: ComponentAddress,
+    notary: &Signer,
+    current_epoch: u64,
+) -> Result<CreateAccountTransaction> {
+    let manifest = ManifestBuilder::new_v2()
+        .lock_fee_from_faucet()
+        .get_free_xrd_from_faucet()
+        .try_deposit_entire_worktop_or_abort(target, None)
+        .build();
+
+    let notary_public_key: PublicKey = notary.public_key.into();
+
+    let detailed = TransactionV2Builder::new()
+        .intent_header(IntentHeaderV2 {
+            network_id: STOKENET_NETWORK_ID,
+            start_epoch_inclusive: Epoch::of(current_epoch),
+            end_epoch_exclusive: Epoch::of(current_epoch + 100),
+            min_proposer_timestamp_inclusive: None,
+            max_proposer_timestamp_exclusive: None,
+            intent_discriminator: rand_intent_discriminator(),
+        })
+        .transaction_header(TransactionHeaderV2 {
+            notary_public_key,
+            notary_is_signatory: false,
+            tip_basis_points: 0,
+        })
+        .manifest(manifest)
+        .notarize(&notary.private_key)
+        .build_no_validate();
+
+    Ok(CreateAccountTransaction {
+        transaction: detailed.transaction,
+        raw: detailed.raw,
+        intent_hash: detailed.transaction_hashes.transaction_intent_hash,
+    })
+}
+
+/// Decode a bech32m account address string to a ComponentAddress.
+pub fn decode_component_address(bech32: &str) -> Result<ComponentAddress> {
+    let decoder = AddressBech32Decoder::new(&NetworkDefinition::stokenet());
+    let (_entity_type, bytes) = decoder
+        .validate_and_decode(bech32)
+        .map_err(|e| anyhow::anyhow!("Address decode failed: {:?}", e))?;
+    let node_id_bytes: [u8; NodeId::LENGTH] = bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("Invalid address byte length"))?;
+    ComponentAddress::try_from(node_id_bytes)
+        .map_err(|e| anyhow::anyhow!("Not a valid component address: {:?}", e))
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ use radix_transactions::prelude::*;
 
 use crate::accounts::STOKENET_NETWORK_ID;
 use crate::keys::Signer;
+use crate::subintent::rand_intent_discriminator;
 
 /// Result of building a main transaction with a child sub-intent.
 pub struct PreparedMainTransaction {
@@ -119,9 +120,8 @@ pub fn build_main_transaction_with_discriminator(
                 // Execute the child sub-intent (the withdrawal)
                 .yield_to_child("withdrawal", ())
         })
-        // Sign as fee payer (authorizes the lock_fee)
-        .sign(&fee_payer.private_key)
-        // Notarize with the fee payer's key
+        // Notarize with the fee payer's key (notary_is_signatory=true means
+        // the notary signature already authorizes the lock_fee — no separate .sign() needed)
         .notarize(&fee_payer.private_key)
         // Build without validation for POC (use .build() for production)
         .build_no_validate();
@@ -153,20 +153,6 @@ pub fn build_stokenet_main_transaction(
         signed_subintent,
         lock_fee_amount,
     )
-}
-
-/// Generate a random intent discriminator.
-///
-/// WARNING: COLLISION RISK - This uses SystemTime nanoseconds which is NOT cryptographically
-/// random. Two calls within the same nanosecond will produce identical discriminators.
-/// This is acceptable for POC/testing but MUST be replaced with a proper random source
-/// (e.g., `rand::random::<u64>()`) for production use.
-fn rand_intent_discriminator() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(1)
 }
 
 /// Convert any raw notarized transaction to hex for Gateway submission.

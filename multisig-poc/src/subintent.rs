@@ -71,7 +71,7 @@ impl WithdrawalSubintentConfig {
 /// random. Two calls within the same nanosecond will produce identical discriminators.
 /// This is acceptable for POC/testing but MUST be replaced with a proper random source
 /// (e.g., `rand::random::<u64>()`) for production use.
-fn rand_intent_discriminator() -> u64 {
+pub(crate) fn rand_intent_discriminator() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -1,206 +1,220 @@
-//! Multisig Orchestrator POC - End-to-End Demonstration
+//! Multisig Orchestrator POC — End-to-End on Stokenet
 //!
-//! This demonstrates the complete multi-party signing workflow for a DAO treasury
-//! withdrawal using 3-of-4 multisig access rules on Radix. The flow covers:
-//! 1. Setup: Generate test keys
-//! 2. Sub-Intent Creation: Build withdrawal sub-intent
-//! 3. Signature Collection: Collect 3-of-4 signatures
-//! 4. Transaction Composition: Build main transaction wrapping the sub-intent
-//! 5. Ready for Submission: Show the transaction is ready (hex encoded)
+//! Executes a complete 3-of-4 multisig treasury withdrawal against live Stokenet:
+//! 1. Setup: connect Gateway, get epoch, generate keys
+//! 2. Create Treasury: build & submit multisig account creation TX
+//! 3. Fund Accounts: fund treasury + fee payer via faucet
+//! 4. Build Subintent: withdrawal subintent with real addresses/epoch
+//! 5. Collect Signatures: 3-of-4 threshold signing
+//! 6. Build Main TX: wrap subintent with fee lock
+//! 7. Submit: submit withdrawal TX, wait for commit
+//! 8. Verify: print summary with dashboard links
 
 use anyhow::Result;
+use radix_common::address::AddressBech32Encoder;
+use radix_common::network::NetworkDefinition;
 use radix_common::prelude::*;
 use radix_engine_interface::prelude::dec;
-use radix_transactions::prelude::*;
 
-use multisig_poc::accounts::STOKENET_NETWORK_ID;
+use multisig_poc::accounts::{
+    build_create_multisig_account_transaction, build_fund_from_faucet_transaction,
+    decode_component_address, transaction_to_hex, MultisigAccountConfig,
+};
+use multisig_poc::gateway::{
+    encode_intent_hash, extract_created_account_address, GatewayClient,
+};
 use multisig_poc::keys::MultisigSigners;
 use multisig_poc::subintent::{
-    add_signature_to_partial, build_unsigned_withdrawal_subintent, format_subintent_hash,
-    sign_subintent_hash, WithdrawalSubintentConfig,
+    add_signature_to_partial, build_unsigned_withdrawal_subintent, sign_subintent_hash,
+    WithdrawalSubintentConfig,
 };
 use multisig_poc::transaction::build_stokenet_main_transaction;
 
 fn main() -> Result<()> {
-    println!("Multisig Orchestrator POC");
-    println!("=========================\n");
+    println!("Multisig Orchestrator POC — E2E on Stokenet");
+    println!("=============================================\n");
+
+    let network = NetworkDefinition::stokenet();
+    let addr_encoder = AddressBech32Encoder::new(&network);
 
     // =========================================================================
-    // PHASE 1: Setup - Generate test keys and create withdrawal sub-intent
+    // PHASE 1: Setup
     // =========================================================================
     println!("[PHASE 1] Setup");
-    println!("---------------");
+    println!("----------------");
 
-    // Generate test signers (4 signers + notary)
+    let gateway = GatewayClient::new();
+    let epoch = gateway.get_current_epoch()?;
+    println!("  Connected to Stokenet — epoch {}", epoch);
+
     let signers = MultisigSigners::new_test_set()?;
-    println!("  Generated {} signers for 3-of-4 multisig:", signers.signers.len());
-    for signer in &signers.signers {
-        println!("    - {} (pubkey: {}...)", signer.name, &hex::encode(signer.public_key.0)[..16]);
-    }
-    println!("  Notary: {} (pubkey: {}...)", signers.notary.name, &hex::encode(signers.notary.public_key.0)[..16]);
+    println!("  Generated {} signers + 1 notary", signers.signers.len());
 
-    // Create dummy account addresses for demonstration
-    // In a real scenario, these would be actual deployed accounts
-    let treasury_account = ComponentAddress::preallocated_account_from_public_key(
-        &Ed25519PublicKey([1; Ed25519PublicKey::LENGTH]),
+    // Derive notary's virtual account (used as fee payer and recipient)
+    let notary_account = ComponentAddress::preallocated_account_from_public_key(
+        &signers.notary.public_key,
     );
-    let recipient_account = ComponentAddress::preallocated_account_from_public_key(
-        &Ed25519PublicKey([2; Ed25519PublicKey::LENGTH]),
-    );
+    let notary_account_bech32 = addr_encoder
+        .encode(notary_account.as_bytes())
+        .expect("encode notary address");
+    println!("  Notary account: {}", notary_account_bech32);
 
-    // Create the withdrawal sub-intent configuration
-    let current_epoch = 1000u64; // Simulated current epoch
+    // =========================================================================
+    // PHASE 2: Create Treasury Account
+    // =========================================================================
+    println!("\n[PHASE 2] Create Treasury Account");
+    println!("-----------------------------------");
+
+    let treasury_config = MultisigAccountConfig::dao_treasury_3_of_4(&signers, epoch);
+    let create_tx = build_create_multisig_account_transaction(&treasury_config, &signers)?;
+    let create_tx_hex = transaction_to_hex(&create_tx.raw);
+    let create_hash = encode_intent_hash(&create_tx.intent_hash)?;
+
+    println!("  TX size: {} bytes", create_tx.raw.as_slice().len());
+    println!("  Intent hash: {}", create_hash);
+    println!("  Submitting...");
+
+    let submit_result = gateway.submit_transaction(&create_tx_hex)?;
+    println!("  Submitted (duplicate={})", submit_result.duplicate);
+
+    println!("  Waiting for commit...");
+    let status = gateway.wait_for_commit(&create_hash, 30)?;
+    println!("  Status: {}", status);
+
+    // Extract created account address
+    let details = gateway.get_committed_details(&create_hash)?;
+    let treasury_bech32 = extract_created_account_address(&details)?;
+    let treasury_address = decode_component_address(&treasury_bech32)?;
+    println!("  Treasury account: {}", treasury_bech32);
+
+    // =========================================================================
+    // PHASE 3: Fund Accounts via Faucet
+    // =========================================================================
+    println!("\n[PHASE 3] Fund Accounts");
+    println!("------------------------");
+
+    // Fund treasury
+    println!("  Funding treasury...");
+    let fund_treasury_tx =
+        build_fund_from_faucet_transaction(treasury_address, &signers.notary, epoch)?;
+    let fund_treasury_hex = transaction_to_hex(&fund_treasury_tx.raw);
+    let fund_treasury_hash = encode_intent_hash(&fund_treasury_tx.intent_hash)?;
+    gateway.submit_transaction(&fund_treasury_hex)?;
+    let status = gateway.wait_for_commit(&fund_treasury_hash, 30)?;
+    println!("  Treasury funded: {}", status);
+
+    // Fund notary account (fee payer)
+    println!("  Funding fee payer (notary account)...");
+    let fund_notary_tx =
+        build_fund_from_faucet_transaction(notary_account, &signers.notary, epoch)?;
+    let fund_notary_hex = transaction_to_hex(&fund_notary_tx.raw);
+    let fund_notary_hash = encode_intent_hash(&fund_notary_tx.intent_hash)?;
+    gateway.submit_transaction(&fund_notary_hex)?;
+    let status = gateway.wait_for_commit(&fund_notary_hash, 30)?;
+    println!("  Fee payer funded: {}", status);
+
+    // =========================================================================
+    // PHASE 4: Build Withdrawal Subintent
+    // =========================================================================
+    println!("\n[PHASE 4] Build Withdrawal Subintent");
+    println!("--------------------------------------");
+
+    // Re-fetch epoch for freshness
+    let epoch = gateway.get_current_epoch()?;
+    println!("  Current epoch: {}", epoch);
+
     let withdrawal_amount = dec!(500);
-
     let config = WithdrawalSubintentConfig::new(
-        treasury_account,
-        recipient_account,
+        treasury_address,
+        notary_account, // recipient = notary's account
         withdrawal_amount,
-        current_epoch,
+        epoch,
     )?;
 
-    println!("\n  Withdrawal sub-intent configuration:");
-    println!("    - Amount: {} XRD", config.amount);
-    println!("    - Valid epochs: {} to {}", config.start_epoch, config.end_epoch);
-    println!("    - Intent discriminator: {}", config.intent_discriminator);
-
-    // Build unsigned sub-intent
     let (unsigned_partial, subintent_hash) = build_unsigned_withdrawal_subintent(&config)?;
-
-    let formatted_hash = format_subintent_hash(&subintent_hash, STOKENET_NETWORK_ID);
-    println!("\n  Built unsigned withdrawal sub-intent");
-    println!("    Hash: {}", formatted_hash);
-    println!("    Initial signatures: {}", unsigned_partial.root_subintent_signatures.signatures.len());
+    println!("  Withdrawal: {} XRD from treasury → notary account", withdrawal_amount);
+    println!(
+        "  Subintent hash: {}",
+        hex::encode(subintent_hash.as_hash().as_slice())
+    );
 
     // =========================================================================
-    // PHASE 2: Signature Collection - Collect 3 of 4 signatures
+    // PHASE 5: Collect Signatures (3-of-4)
     // =========================================================================
-    println!("\n[PHASE 2] Signature Collection");
-    println!("-------------------------------");
-    println!("  Collecting signatures for 3-of-4 threshold...\n");
+    println!("\n[PHASE 5] Collect Signatures");
+    println!("-----------------------------");
 
     let mut signed_partial = unsigned_partial;
     let threshold = 3;
-    let total_signers = signers.signers.len();
 
-    // Collect signatures from the first 3 signers (skip signer 4 to prove threshold works)
     for (i, signer) in signers.signers.iter().enumerate() {
         if i < threshold {
-            // Sign the subintent hash with this signer
             let signature = sign_subintent_hash(&subintent_hash, signer);
-
-            // Add the signature to the partial transaction
             signed_partial = add_signature_to_partial(signed_partial, signature);
-
-            let sig_count = signed_partial.root_subintent_signatures.signatures.len();
-            println!(
-                "  [{}] {}: signed (signatures: {}/{})",
-                i + 1,
-                signer.name,
-                sig_count,
-                threshold
-            );
+            println!("  [{}] {} — signed", i + 1, signer.name);
         } else {
-            // Skip this signer to demonstrate threshold behavior
-            println!(
-                "  [{}] {}: SKIPPED (threshold already met)",
-                i + 1,
-                signer.name
-            );
+            println!("  [{}] {} — SKIPPED (threshold met)", i + 1, signer.name);
         }
     }
 
-    // =========================================================================
-    // PHASE 3: Verification - Confirm signature collection
-    // =========================================================================
-    println!("\n[PHASE 3] Signature Verification");
-    println!("---------------------------------");
-
-    let final_sig_count = signed_partial.root_subintent_signatures.signatures.len();
-    println!("  Total signatures collected: {}/{}", final_sig_count, total_signers);
-    println!("  Threshold requirement: {}/{}", threshold, total_signers);
-
-    if final_sig_count >= threshold {
-        println!("  Status: THRESHOLD MET - Sub-intent is ready for composition");
-    } else {
-        println!("  Status: THRESHOLD NOT MET - Need {} more signature(s)", threshold - final_sig_count);
-        return Err(anyhow::anyhow!("Insufficient signatures"));
-    }
-
-    // Show signature details
-    println!("\n  Signature details:");
-    for (i, sig) in signed_partial.root_subintent_signatures.signatures.iter().enumerate() {
-        // Extract pubkey from Ed25519 signatures (our test signers use Ed25519)
-        if let SignatureWithPublicKeyV1::Ed25519 { public_key, .. } = &sig.0 {
-            println!("    [{}] Ed25519 pubkey: {}...", i + 1, &hex::encode(public_key.0)[..16]);
-        } else {
-            println!("    [{}] Secp256k1 signature", i + 1);
-        }
-    }
-
-    // Encode the signed partial transaction for storage/transmission
-    let raw_partial = signed_partial
-        .to_raw()
-        .map_err(|e| anyhow::anyhow!("Failed to encode signed partial: {:?}", e))?;
-    let partial_hex = hex::encode(raw_partial.as_slice());
-
-    println!("\n  Signed partial transaction:");
-    println!("    Size: {} bytes", raw_partial.as_slice().len());
-    println!("    Hex (first 64 chars): {}...", &partial_hex[..64.min(partial_hex.len())]);
-
-    // =========================================================================
-    // PHASE 4: Transaction Composition - Build main transaction with sub-intent
-    // =========================================================================
-    println!("\n[PHASE 4] Transaction Composition");
-    println!("----------------------------------");
-
-    // The fee payer account is derived from the notary's public key
-    let fee_payer_account = ComponentAddress::preallocated_account_from_public_key(
-        &signers.notary.public_key,
+    println!(
+        "  Signatures: {}/{}",
+        signed_partial.root_subintent_signatures.signatures.len(),
+        signers.signers.len()
     );
 
-    println!("  Building main transaction...");
-    println!("    Fee payer: {} (notary)", &hex::encode(signers.notary.public_key.0)[..16]);
-    println!("    Network: Stokenet (ID: {})", STOKENET_NETWORK_ID);
+    // =========================================================================
+    // PHASE 6: Build Main Transaction
+    // =========================================================================
+    println!("\n[PHASE 6] Build Main Transaction");
+    println!("----------------------------------");
 
-    // Build the main transaction wrapping the signed sub-intent
     let main_tx = build_stokenet_main_transaction(
-        current_epoch,
-        fee_payer_account,
+        epoch,
+        notary_account,
         &signers.notary,
         signed_partial,
     )?;
 
-    println!("\n  Main transaction built successfully:");
-    println!("    Transaction intent hash: {}", main_tx.intent_hash_hex());
-    println!("    Transaction size: {} bytes", main_tx.raw.as_slice().len());
+    println!("  TX size: {} bytes", main_tx.raw.as_slice().len());
+    let main_hash = encode_intent_hash(&main_tx.intent_hash)?;
+    println!("  Intent hash: {}", main_hash);
 
     // =========================================================================
-    // PHASE 5: Ready for Submission
+    // PHASE 7: Submit Withdrawal TX
     // =========================================================================
-    println!("\n[PHASE 5] Ready for Submission");
-    println!("-------------------------------");
+    println!("\n[PHASE 7] Submit Withdrawal");
+    println!("----------------------------");
 
-    let tx_hex = main_tx.to_hex();
-    println!("  Transaction hex (first 64 chars): {}...", &tx_hex[..64.min(tx_hex.len())]);
-    println!("  Transaction hex length: {} chars", tx_hex.len());
+    let main_tx_hex = main_tx.to_hex();
+    println!("  Submitting...");
+    let submit_result = gateway.submit_transaction(&main_tx_hex)?;
+    println!("  Submitted (duplicate={})", submit_result.duplicate);
 
-    println!("\n  NOTE: Actual submission requires:");
-    println!("    1. Fund test accounts via Stokenet faucet");
-    println!("    2. Create DAO treasury account on-chain first");
-    println!("    3. Then submit this transaction via Gateway API");
+    println!("  Waiting for commit...");
+    let status = gateway.wait_for_commit(&main_hash, 30)?;
+    println!("  Status: {}", status);
 
     // =========================================================================
-    // Summary
+    // PHASE 8: Summary
     // =========================================================================
-    println!("\n[SUMMARY]");
-    println!("---------");
-    println!("  Successfully demonstrated full multisig sub-intent flow:");
-    println!("    1. Generated 4 test signers + 1 notary");
-    println!("    2. Created withdrawal sub-intent for {} XRD", withdrawal_amount);
-    println!("    3. Collected {}/{} signatures (threshold: {})", final_sig_count, total_signers, threshold);
-    println!("    4. Built main transaction with child sub-intent");
-    println!("    5. Transaction ready for submission ({} bytes)", main_tx.raw.as_slice().len());
+    println!("\n[PHASE 8] Summary");
+    println!("==================");
+    println!("  Treasury account:  {}", treasury_bech32);
+    println!("  Fee payer:         {}", notary_account_bech32);
+    println!("  Recipient:         {}", notary_account_bech32);
+    println!("  Withdrawal amount: {} XRD", withdrawal_amount);
+    println!();
+    println!("  Create treasury TX: {}", create_hash);
+    println!("  Fund treasury TX:   {}", fund_treasury_hash);
+    println!("  Fund fee payer TX:  {}", fund_notary_hash);
+    println!("  Withdrawal TX:      {}", main_hash);
+    println!();
+    println!(
+        "  Dashboard: https://stokenet-dashboard.radixdlt.com/transaction/{}/summary",
+        main_hash
+    );
 
+    println!("\nDone.");
     Ok(())
 }
