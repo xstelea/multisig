@@ -15,6 +15,7 @@
 ### Task 1: Backend crate scaffolding
 
 **Files:**
+
 - Create: `multisig-server/Cargo.toml`
 - Create: `multisig-server/src/main.rs`
 - Create: `multisig-server/.env.example`
@@ -69,6 +70,7 @@ Run: `cargo build` then `cargo run` and `curl localhost:3001/health`
 ### Task 2: PostgreSQL migrations setup
 
 **Files:**
+
 - Create: `multisig-server/migrations/001_initial.sql`
 
 **Step 1: Create empty initial migration**
@@ -91,6 +93,7 @@ Add `sqlx::migrate!("./migrations").run(&pool).await` to startup.
 ### Task 3: GatewayClient — read_access_rule
 
 **Files:**
+
 - Create: `multisig-server/src/gateway.rs`
 
 **Step 1: Write unit test for access rule parsing**
@@ -144,6 +147,7 @@ Test against `account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9l
 ### Task 4: Access rule API endpoint
 
 **Files:**
+
 - Modify: `multisig-server/src/main.rs`
 
 **Step 1: Add GET /account/access-rule endpoint**
@@ -163,6 +167,7 @@ Run server, curl endpoint, see real access rule data from Stokenet.
 ### Task 5: Frontend scaffolding
 
 **Files:**
+
 - Create: `multisig-app/package.json`
 - Create: `multisig-app/vite.config.ts`
 - Create: `multisig-app/tsconfig.json`
@@ -200,6 +205,7 @@ Index route: placeholder "Multisig Orchestrator" heading.
 ### Task 6: Effect runtime + Radix dApp Toolkit + OrchestratorClient
 
 **Files:**
+
 - Create: `multisig-app/src/lib/envVars.ts`
 - Create: `multisig-app/src/lib/dappToolkit.ts`
 - Create: `multisig-app/src/atom/makeRuntimeAtom.ts`
@@ -234,6 +240,7 @@ Atom that fetches access rule from OrchestratorClient on mount.
 ### Task 7: Home page — display access rule + wallet connect
 
 **Files:**
+
 - Modify: `multisig-app/src/routes/index.tsx`
 - Modify: `multisig-app/src/routes/__root.tsx`
 
@@ -244,6 +251,7 @@ Import RadixDappToolkit, mount via useAtomMount, render `<radix-connect-button>`
 **Step 2: Build home page**
 
 Display:
+
 - Connected wallet state (from walletDataAtom)
 - Multisig account address
 - Current signers with key hashes
@@ -259,12 +267,12 @@ Uses Result.builder pattern for loading/error/success states.
 
 ## Summary
 
-| Task | Description |
-|------|-------------|
-| 1 | Backend crate scaffolding (axum, config, /health) |
-| 2 | PostgreSQL migrations setup |
-| 3 | GatewayClient — read_access_rule with tests |
-| 4 | Access rule API endpoint |
-| 5 | Frontend scaffolding (TanStack Start + Tailwind) |
-| 6 | Effect runtime + RDT + OrchestratorClient |
-| 7 | Home page — display access rule + wallet connect |
+| Task | Description                                       |
+| ---- | ------------------------------------------------- |
+| 1    | Backend crate scaffolding (axum, config, /health) |
+| 2    | PostgreSQL migrations setup                       |
+| 3    | GatewayClient — read_access_rule with tests       |
+| 4    | Access rule API endpoint                          |
+| 5    | Frontend scaffolding (TanStack Start + Tailwind)  |
+| 6    | Effect runtime + RDT + OrchestratorClient         |
+| 7    | Home page — display access rule + wallet connect  |

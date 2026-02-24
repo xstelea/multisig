@@ -1,3 +1,4 @@
 {
-  "*": "prettier --ignore-unknown --write"
+  "*.{js,jsx,ts,tsx,mjs,cjs}": ["oxlint", "oxfmt --write"],
+  "*.json": "oxfmt --write"
 }

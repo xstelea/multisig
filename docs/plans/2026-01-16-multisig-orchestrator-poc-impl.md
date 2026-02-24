@@ -13,6 +13,7 @@
 ## Task 1: Project Setup
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/Cargo.toml`
 - Create: `multisig-orchestrator-poc/src/main.rs`
 
@@ -72,6 +73,7 @@ git commit -m "feat(poc): initialize multisig orchestrator project"
 ## Task 2: Test Keys Module
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/src/keys.rs`
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
@@ -212,6 +214,7 @@ git commit -m "feat(poc): add test keys module with placeholder keys"
 ## Task 3: Gateway Client
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/src/gateway.rs`
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
@@ -467,6 +470,7 @@ git commit -m "feat(poc): add Stokenet Gateway client"
 ## Task 4: Account Setup (Create DAO Treasury)
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/src/accounts.rs`
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
@@ -736,6 +740,7 @@ git commit -m "feat(poc): add DAO treasury account creation with 3-of-4 access r
 ## Task 5: Sub-Intent Creation
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/src/subintent.rs`
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
@@ -875,6 +880,7 @@ git commit -m "feat(poc): add sub-intent creation for DAO withdrawal"
 ## Task 6: Signature Collection
 
 **Files:**
+
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
 **Step 1: Add signature collection phase**
@@ -920,6 +926,7 @@ git commit -am "feat(poc): add signature collection phase (3 of 4)"
 ## Task 7: Transaction Composition and Submission
 
 **Files:**
+
 - Create: `multisig-orchestrator-poc/src/transaction.rs`
 - Modify: `multisig-orchestrator-poc/src/main.rs`
 
@@ -1134,6 +1141,7 @@ git commit -am "feat(poc): add transaction composition and submission"
 ## Task 8: Generate and Fund Test Keys
 
 **Files:**
+
 - Modify: `multisig-orchestrator-poc/src/keys.rs`
 
 **Step 1: Create a key generation utility**
@@ -1191,6 +1199,7 @@ Run: `cd multisig-orchestrator-poc && cargo run --bin generate_keys`
 Expected: Prints 6 keypairs with Stokenet addresses
 
 Then:
+
 1. Go to https://stokenet-console.radixdlt.com/faucet
 2. Fund each address with XRD
 3. Update `keys.rs` with the real values
@@ -1207,6 +1216,7 @@ git commit -am "feat(poc): add key generation utility"
 ## Task 9: End-to-End Test
 
 **Files:**
+
 - None (uses existing code)
 
 **Step 1: Run the full POC**
@@ -1277,6 +1287,7 @@ Creates an account with 3-of-4 Ed25519 virtual signature badge access rule on St
 #### Virtual Signature Badge Format
 
 The NonFungibleLocalId for a signature badge is derived from the public key:
+
 1. Take the Ed25519 public key (32 bytes)
 2. Hash with Blake2b-256
 3. Take the **last 26 bytes** of the hash
@@ -1301,6 +1312,7 @@ function deriveNftLocalId(publicKeyHex: string): string {
 #### Example Derivation
 
 For public key `554a6db54c09d609deabf5b234ab3627cdd182ebf0d60baa070ba4ba2e8e5b7a`:
+
 - Blake2b-256 hash → take last 26 bytes → `a1b2c3...` (52 hex chars)
 - NonFungibleGlobalId: `resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08:[a1b2c3...]`
 
@@ -1425,6 +1437,7 @@ YIELD_TO_PARENT;
 ```
 
 **Key points:**
+
 - The subintent is signed by 3 of the 4 signers (not the fee payer)
 - `YIELD_TO_PARENT` is mandatory - marks the end of the subintent
 - The parent transaction will "call" this subintent via `YIELD_TO_CHILD`
@@ -1452,6 +1465,7 @@ YIELD_TO_CHILD NamedIntent("dao_withdraw");
 ```
 
 **Key points:**
+
 - `USE_CHILD` declares the subintent at the manifest start
 - The `Intent("<subintent_hash>")` is the hash of the signed partial transaction
 - `YIELD_TO_CHILD` invokes the subintent, passing control to it
@@ -1494,18 +1508,19 @@ YIELD_TO_CHILD NamedIntent("dao_withdraw");
 
 ### A.5 Virtual Signature Badge Resources by Network
 
-| Network | Virtual Signature Badge Resource |
-|---------|----------------------------------|
+| Network      | Virtual Signature Badge Resource                                           |
+| ------------ | -------------------------------------------------------------------------- |
 | **Stokenet** | `resource_tdx_2_1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxseuu08` |
-| Mainnet | `resource_rdx1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxxu85e5y` |
+| Mainnet      | `resource_rdx1nfxxxxxxxxxxsgnture9xxxxxxxxx004007650489xxxxxxxxxxu85e5y`   |
 
 **NonFungibleLocalId derivation:**
+
 ```typescript
 // 1. Hash the public key with Blake2b-256
 // 2. Take the last 26 bytes of the hash
 // 3. Hex encode to get the local ID
 
-import { blake2b } from '@noble/hashes/blake2b';
+import { blake2b } from "@noble/hashes/blake2b";
 
 function deriveSignatureBadgeLocalId(publicKeyHex: string): string {
   const publicKeyBytes = hexToBytes(publicKeyHex);
@@ -1516,6 +1531,7 @@ function deriveSignatureBadgeLocalId(publicKeyHex: string): string {
 ```
 
 **Example:**
+
 ```
 Public key: 554a6db54c09d609deabf5b234ab3627cdd182ebf0d60baa070ba4ba2e8e5b7a
 Local ID:   [<52_hex_chars_from_blake2b_last26>]

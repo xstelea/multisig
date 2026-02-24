@@ -42,12 +42,12 @@ Comprehensive reference for `@effect/platform` (v0.94.2) — unified, platform-i
 
 ### Dependencies
 
-| Dependency | Purpose |
-|---|---|
-| `find-my-way-ts` | Radix-tree HTTP router matching |
-| `msgpackr` | MessagePack binary serialization |
-| `multipasta` | Multipart form data parsing |
-| `effect` (peer) | Core Effect library |
+| Dependency       | Purpose                          |
+| ---------------- | -------------------------------- |
+| `find-my-way-ts` | Radix-tree HTTP router matching  |
+| `msgpackr`       | MessagePack binary serialization |
+| `multipasta`     | Multipart form data parsing      |
+| `effect` (peer)  | Core Effect library              |
 
 ### Exports Pattern
 
@@ -61,11 +61,12 @@ Comprehensive reference for `@effect/platform` (v0.94.2) — unified, platform-i
 
 - **Wildcard exports**: Every `src/*.ts` is importable as `@effect/platform/ModuleName`
 - **Internal blocked**: `./internal/*` mapped to `null` — implementation files are private
-- **Import convention**: `import { HttpClient } from "@effect/platform"`  (barrel) or `import * as HttpClient from "@effect/platform/HttpClient"` (tree-shakeable)
+- **Import convention**: `import { HttpClient } from "@effect/platform"` (barrel) or `import * as HttpClient from "@effect/platform/HttpClient"` (tree-shakeable)
 
 ### Module Organization
 
 Each public module follows a consistent structure:
+
 1. Type definitions & interfaces (in `src/ModuleName.ts`)
 2. `TypeId` symbols for discriminated unions
 3. Re-exports from `./internal/moduleName.js` (hidden implementation)
@@ -74,21 +75,21 @@ Each public module follows a consistent structure:
 
 ## Module Map
 
-| Category | Count | Modules |
-|---|---|---|
-| HTTP API | 8 | HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiBuilder, HttpApiSchema, HttpApiScalar, HttpApiSecurity, HttpApiMiddleware |
-| HTTP Server | 7 | HttpServer, HttpServerRequest, HttpServerResponse, HttpServerError, HttpServerRespondable, HttpApp, HttpRouter |
-| HTTP Client | 6 | HttpClient, HttpClientRequest, HttpClientResponse, HttpClientError, FetchHttpClient, HttpIncomingMessage |
-| HTTP Core | 8 | HttpMethod, HttpBody, Headers, Cookies, HttpPlatform, HttpTraceContext, Etag, HttpLayerRouter |
-| HTTP Docs | 4 | OpenApi, OpenApiJsonSchema, HttpApiSwagger, HttpApiClient |
-| HTTP Composition | 2 | HttpMiddleware, HttpMultiplex |
-| Platform Services | 7 | FileSystem, Path, Terminal, KeyValueStore, PlatformConfigProvider, PlatformLogger, Runtime |
-| Process/Workers | 5 | Command, CommandExecutor, Worker, WorkerRunner, WorkerError |
-| Data Formats | 3 | MsgPack, Multipart, Ndjson |
-| URLs & Web | 3 | Url, UrlParams, ChannelSchema |
-| Sockets | 2 | Socket, SocketServer |
-| Utilities | 4 | Effectify, Error, Template, Transferable |
-| **Total** | **56** | |
+| Category          | Count  | Modules                                                                                                                  |
+| ----------------- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| HTTP API          | 8      | HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiBuilder, HttpApiSchema, HttpApiScalar, HttpApiSecurity, HttpApiMiddleware |
+| HTTP Server       | 7      | HttpServer, HttpServerRequest, HttpServerResponse, HttpServerError, HttpServerRespondable, HttpApp, HttpRouter           |
+| HTTP Client       | 6      | HttpClient, HttpClientRequest, HttpClientResponse, HttpClientError, FetchHttpClient, HttpIncomingMessage                 |
+| HTTP Core         | 8      | HttpMethod, HttpBody, Headers, Cookies, HttpPlatform, HttpTraceContext, Etag, HttpLayerRouter                            |
+| HTTP Docs         | 4      | OpenApi, OpenApiJsonSchema, HttpApiSwagger, HttpApiClient                                                                |
+| HTTP Composition  | 2      | HttpMiddleware, HttpMultiplex                                                                                            |
+| Platform Services | 7      | FileSystem, Path, Terminal, KeyValueStore, PlatformConfigProvider, PlatformLogger, Runtime                               |
+| Process/Workers   | 5      | Command, CommandExecutor, Worker, WorkerRunner, WorkerError                                                              |
+| Data Formats      | 3      | MsgPack, Multipart, Ndjson                                                                                               |
+| URLs & Web        | 3      | Url, UrlParams, ChannelSchema                                                                                            |
+| Sockets           | 2      | Socket, SocketServer                                                                                                     |
+| Utilities         | 4      | Effectify, Error, Template, Transferable                                                                                 |
+| **Total**         | **56** |                                                                                                                          |
 
 ---
 
@@ -99,7 +100,7 @@ Each public module follows a consistent structure:
 ### Service Tag
 
 ```typescript
-import { HttpClient } from "@effect/platform"
+import { HttpClient } from "@effect/platform";
 
 // HttpClient is a Context.Tag
 // execute: (request: HttpClientRequest) => Effect<HttpClientResponse, HttpClientError, R>
@@ -110,13 +111,13 @@ import { HttpClient } from "@effect/platform"
 HTTP verb shortcuts all return `Effect<HttpClientResponse, HttpClientError, HttpClient>`:
 
 ```typescript
-HttpClient.get(url)
-HttpClient.post(url)
-HttpClient.put(url)
-HttpClient.patch(url)
-HttpClient.del(url)
-HttpClient.head(url)
-HttpClient.options(url)
+HttpClient.get(url);
+HttpClient.post(url);
+HttpClient.put(url);
+HttpClient.patch(url);
+HttpClient.del(url);
+HttpClient.head(url);
+HttpClient.options(url);
 ```
 
 ### Request/Response Pipeline
@@ -136,43 +137,43 @@ HttpClientRequest
 
 ```typescript
 // Transform request before sending
-HttpClient.mapRequest(client, f)
-HttpClient.mapRequestEffect(client, f)
+HttpClient.mapRequest(client, f);
+HttpClient.mapRequestEffect(client, f);
 
 // Transform response after receiving
-HttpClient.transformResponse(client, f)
+HttpClient.transformResponse(client, f);
 
 // Full transform: access both request and effect
-HttpClient.transform(client, f)
+HttpClient.transform(client, f);
 ```
 
 ### Error Handling & Retry
 
 ```typescript
-HttpClient.catchAll(client, handler)
-HttpClient.catchTag(client, tag, handler)
-HttpClient.filterStatus(client, range)
-HttpClient.filterStatusOk(client)          // only 2xx
-HttpClient.retry(client, schedule)
-HttpClient.retryTransient(client, schedule) // retry on transient failures
+HttpClient.catchAll(client, handler);
+HttpClient.catchTag(client, tag, handler);
+HttpClient.filterStatus(client, range);
+HttpClient.filterStatusOk(client); // only 2xx
+HttpClient.retry(client, schedule);
+HttpClient.retryTransient(client, schedule); // retry on transient failures
 ```
 
 ### Composition Features
 
 ```typescript
-HttpClient.withCookiesRef(client, ref)             // persist cookies across requests
-HttpClient.followRedirects(client)                 // automatic redirect handling
-HttpClient.withTracerPropagation(client, enabled)  // distributed tracing
-HttpClient.withSpanNameGenerator(client, fn)       // custom span naming
+HttpClient.withCookiesRef(client, ref); // persist cookies across requests
+HttpClient.followRedirects(client); // automatic redirect handling
+HttpClient.withTracerPropagation(client, enabled); // distributed tracing
+HttpClient.withSpanNameGenerator(client, fn); // custom span naming
 ```
 
 ### Fetch Implementation
 
 ```typescript
-import { FetchHttpClient } from "@effect/platform"
+import { FetchHttpClient } from "@effect/platform";
 
 // Layer providing HttpClient backed by browser/Node fetch
-FetchHttpClient.layer
+FetchHttpClient.layer;
 ```
 
 ---
@@ -185,37 +186,37 @@ FetchHttpClient.layer
 
 ```typescript
 interface HttpServer {
-  serve<E, R>(httpApp: App.Default<E, R>): Effect<void, never, R | Scope>
-  address: Address // TcpAddress | UnixAddress
+  serve<E, R>(httpApp: App.Default<E, R>): Effect<void, never, R | Scope>;
+  address: Address; // TcpAddress | UnixAddress
 }
 ```
 
 ### Address Types
 
 ```typescript
-type TcpAddress = { _tag: "TcpAddress"; hostname: string; port: number }
-type UnixAddress = { _tag: "UnixAddress"; path: string }
+type TcpAddress = { _tag: "TcpAddress"; hostname: string; port: number };
+type UnixAddress = { _tag: "UnixAddress"; path: string };
 ```
 
 ### Serving Patterns
 
 ```typescript
 // Layer-based serving (recommended)
-HttpServer.serve()
-HttpServer.serve(httpApp, middleware)
+HttpServer.serve();
+HttpServer.serve(httpApp, middleware);
 
 // Effect-based serving
-HttpServer.serveEffect()
+HttpServer.serveEffect();
 ```
 
 ### Testing & Utilities
 
 ```typescript
-HttpServer.addressWith(f)           // run effect with server address
-HttpServer.addressFormattedWith(f)  // run with formatted address string
-HttpServer.logAddress               // log server address on startup
-HttpServer.layerTestClient          // HttpClient pointing to running server (tests)
-HttpServer.layerContext             // provides HttpPlatform, FileSystem, Etag.Generator, Path
+HttpServer.addressWith(f); // run effect with server address
+HttpServer.addressFormattedWith(f); // run with formatted address string
+HttpServer.logAddress; // log server address on startup
+HttpServer.layerTestClient; // HttpClient pointing to running server (tests)
+HttpServer.layerContext; // provides HttpPlatform, FileSystem, Etag.Generator, Path
 ```
 
 ---
@@ -228,61 +229,61 @@ HttpServer.layerContext             // provides HttpPlatform, FileSystem, Etag.G
 
 ```typescript
 // HttpRouter<E, R> extends App.Default<E | RouteNotFound, R>
-const router = HttpRouter.empty
+const router = HttpRouter.empty;
 ```
 
 ### Route Definition
 
 ```typescript
 interface Route<E, R> {
-  method: HttpMethod | "*"
-  path: PathInput         // "/{param}" or "*" wildcard
-  handler: Route.Handler<E, R>
-  prefix?: string
-  uninterruptible?: boolean
+  method: HttpMethod | "*";
+  path: PathInput; // "/{param}" or "*" wildcard
+  handler: Route.Handler<E, R>;
+  prefix?: string;
+  uninterruptible?: boolean;
 }
 ```
 
 ### HTTP Verb Combinators
 
 ```typescript
-HttpRouter.get(path, handler)
-HttpRouter.post(path, handler)
-HttpRouter.put(path, handler)
-HttpRouter.patch(path, handler)
-HttpRouter.del(path, handler)
-HttpRouter.all(path, handler)   // any method
+HttpRouter.get(path, handler);
+HttpRouter.post(path, handler);
+HttpRouter.put(path, handler);
+HttpRouter.patch(path, handler);
+HttpRouter.del(path, handler);
+HttpRouter.all(path, handler); // any method
 ```
 
 ### Composition
 
 ```typescript
-HttpRouter.concat(router1, router2)
-HttpRouter.mount(router, "/api", subRouter)
-HttpRouter.mountApp(router, "/api", httpApp)
-HttpRouter.prefixAll(router, "/v1")
+HttpRouter.concat(router1, router2);
+HttpRouter.mount(router, "/api", subRouter);
+HttpRouter.mountApp(router, "/api", httpApp);
+HttpRouter.prefixAll(router, "/v1");
 ```
 
 ### Route Context (Path Params)
 
 ```typescript
 // RouteContext tag provides params: Record<string, string>
-HttpRouter.params                    // get path params
-HttpRouter.schemaParams(schema)      // validate path params via Schema
-HttpRouter.schemaPathParams(schema)
-HttpRouter.schemaJson(schema)        // validate JSON body
-HttpRouter.schemaNoBody(schema)      // validate without body
+HttpRouter.params; // get path params
+HttpRouter.schemaParams(schema); // validate path params via Schema
+HttpRouter.schemaPathParams(schema);
+HttpRouter.schemaJson(schema); // validate JSON body
+HttpRouter.schemaNoBody(schema); // validate without body
 ```
 
 ### Custom Router Tags
 
 ```typescript
 // Create named router with .Live, .router, .use, .unwrap, .serve
-const MyRouter = HttpRouter.Tag<"MyRouter">()
-const layer = MyRouter.router
+const MyRouter = HttpRouter.Tag<"MyRouter">();
+const layer = MyRouter.router;
 
 // Pre-defined default
-HttpRouter.Default
+HttpRouter.Default;
 ```
 
 ---
@@ -300,10 +301,11 @@ const getUser = HttpApiEndpoint.get("getUser", "/users/:id")
   .setPathParams(Schema.Struct({ id: Schema.NumberFromString }))
   .addSuccess(UserSchema)
   .addError(NotFoundError, { status: 404 })
-  .setHeaders(Schema.Struct({ authorization: Schema.String }))
+  .setHeaders(Schema.Struct({ authorization: Schema.String }));
 ```
 
 Properties:
+
 - `name`, `path`, `method`
 - `pathSchema`, `urlParamsSchema`, `payloadSchema`, `headersSchema`
 - `successSchema`, `errorSchema`
@@ -316,7 +318,7 @@ const usersGroup = HttpApiGroup.make("users")
   .add(createUser)
   .addError(AuthError, { status: 401 })
   .prefix("/api")
-  .middleware(AuthMiddleware)
+  .middleware(AuthMiddleware);
 ```
 
 ### HttpApi (Top-Level API)
@@ -326,7 +328,7 @@ const api = HttpApi.make("MyAPI")
   .add(usersGroup)
   .add(postsGroup)
   .addError(ServerError)
-  .middleware(LoggingMiddleware)
+  .middleware(LoggingMiddleware);
 ```
 
 ### HttpApiBuilder (Implementation)
@@ -335,24 +337,24 @@ const api = HttpApi.make("MyAPI")
 // Implement endpoints and serve
 const layer = HttpApiBuilder.api(api).pipe(
   HttpServer.serve(HttpMiddleware.logger)
-)
+);
 
 // Web standard handler for edge deployments
-const handler = HttpApiBuilder.toWebHandler(api)
+const handler = HttpApiBuilder.toWebHandler(api);
 ```
 
 ### Related Modules
 
-| Module | Purpose |
-|---|---|
-| `HttpApiSchema` | Schema handling for API endpoints |
-| `HttpApiScalar` | Scalar type support |
-| `HttpApiSecurity` | Authentication/authorization definitions |
-| `HttpApiMiddleware` | Middleware for API groups/endpoints |
-| `HttpApiClient` | Auto-generated client from API definition |
-| `HttpApiSwagger` | Swagger UI integration |
-| `OpenApi` | OpenAPI spec generation |
-| `OpenApiJsonSchema` | JSON Schema for OpenAPI |
+| Module              | Purpose                                   |
+| ------------------- | ----------------------------------------- |
+| `HttpApiSchema`     | Schema handling for API endpoints         |
+| `HttpApiScalar`     | Scalar type support                       |
+| `HttpApiSecurity`   | Authentication/authorization definitions  |
+| `HttpApiMiddleware` | Middleware for API groups/endpoints       |
+| `HttpApiClient`     | Auto-generated client from API definition |
+| `HttpApiSwagger`    | Swagger UI integration                    |
+| `OpenApi`           | OpenAPI spec generation                   |
+| `OpenApiJsonSchema` | JSON Schema for OpenAPI                   |
 
 ### Reflection
 
@@ -372,42 +374,42 @@ HttpApi.reflect(api, {
 
 ```typescript
 interface HttpClientRequest {
-  method: HttpMethod
-  url: string
-  urlParams: UrlParams
-  hash?: string
-  headers: Headers
-  body: HttpBody
+  method: HttpMethod;
+  url: string;
+  urlParams: UrlParams;
+  hash?: string;
+  headers: Headers;
+  body: HttpBody;
 }
 ```
 
 **Constructors** (typed — GET excludes body, POST excludes URL params):
 
 ```typescript
-HttpClientRequest.get(url)
-HttpClientRequest.post(url)
+HttpClientRequest.get(url);
+HttpClientRequest.post(url);
 // ... all HTTP verbs
 ```
 
 **Modification**:
 
 ```typescript
-HttpClientRequest.setHeader(req, key, value)
-HttpClientRequest.bearerToken(req, token)
-HttpClientRequest.basicAuth(req, user, pass)
-HttpClientRequest.bodyJson(req, data)
-HttpClientRequest.bodyStream(req, stream)
-HttpClientRequest.bodyFormData(req, formData)
+HttpClientRequest.setHeader(req, key, value);
+HttpClientRequest.bearerToken(req, token);
+HttpClientRequest.basicAuth(req, user, pass);
+HttpClientRequest.bodyJson(req, data);
+HttpClientRequest.bodyStream(req, stream);
+HttpClientRequest.bodyFormData(req, formData);
 ```
 
 ### HttpClientResponse
 
 ```typescript
 interface HttpClientResponse extends IncomingMessage<ResponseError> {
-  request: HttpClientRequest
-  status: number
-  cookies: Cookies
-  formData: Effect<FormData, ResponseError>
+  request: HttpClientRequest;
+  status: number;
+  cookies: Cookies;
+  formData: Effect<FormData, ResponseError>;
 }
 ```
 
@@ -428,13 +430,13 @@ HttpClientResponse.stream(response)  // Stream<Uint8Array>
 ```typescript
 // Properties: source, url, originalUrl, method, cookies
 // Body parsing:
-HttpServerRequest.schemaBodyJson(schema)
-HttpServerRequest.schemaBodyForm(schema)
-HttpServerRequest.schemaBodyMultipart(schema)
+HttpServerRequest.schemaBodyJson(schema);
+HttpServerRequest.schemaBodyForm(schema);
+HttpServerRequest.schemaBodyMultipart(schema);
 // WebSocket:
-HttpServerRequest.upgrade          // WebSocket upgrade
+HttpServerRequest.upgrade; // WebSocket upgrade
 // Web standard:
-HttpServerRequest.toWeb()
+HttpServerRequest.toWeb();
 ```
 
 - `ParsedSearchParams` tag for query string access
@@ -444,23 +446,23 @@ HttpServerRequest.toWeb()
 **Constructors**:
 
 ```typescript
-HttpServerResponse.empty()
-HttpServerResponse.text("hello")
-HttpServerResponse.json({ data: 42 })
-HttpServerResponse.redirect("/other")
-HttpServerResponse.html`<h1>Hello ${name}</h1>`   // template literal
-HttpServerResponse.stream(byteStream)
-HttpServerResponse.file(path)
-HttpServerResponse.formData(data)
+HttpServerResponse.empty();
+HttpServerResponse.text("hello");
+HttpServerResponse.json({ data: 42 });
+HttpServerResponse.redirect("/other");
+HttpServerResponse.html`<h1>Hello ${name}</h1>`; // template literal
+HttpServerResponse.stream(byteStream);
+HttpServerResponse.file(path);
+HttpServerResponse.formData(data);
 ```
 
 **Combinators**:
 
 ```typescript
-HttpServerResponse.setHeader(res, key, value)
-HttpServerResponse.setStatus(res, 201)
-HttpServerResponse.setCookie(res, name, value)
-HttpServerResponse.schemaJson(schema)(data)
+HttpServerResponse.setHeader(res, key, value);
+HttpServerResponse.setStatus(res, 201);
+HttpServerResponse.setCookie(res, name, value);
+HttpServerResponse.schemaJson(schema)(data);
 ```
 
 ---
@@ -470,54 +472,55 @@ HttpServerResponse.schemaJson(schema)(data)
 **Module**: `HttpMiddleware.ts`
 
 ```typescript
-type HttpMiddleware = <E, R>(self: App.Default<E, R>) => App.Default<any, any>
+type HttpMiddleware = <E, R>(self: App.Default<E, R>) => App.Default<any, any>;
 ```
 
 ### Built-in Middleware
 
 ```typescript
-HttpMiddleware.logger                       // request/response logging
-HttpMiddleware.xForwardedHeaders            // X-Forwarded-* processing
-HttpMiddleware.searchParamsParser           // automatic query parsing
-HttpMiddleware.cors({                       // CORS
-  allowedOrigins: ["https://example.com"],  // or predicate
+HttpMiddleware.logger; // request/response logging
+HttpMiddleware.xForwardedHeaders; // X-Forwarded-* processing
+HttpMiddleware.searchParamsParser; // automatic query parsing
+HttpMiddleware.cors({
+  // CORS
+  allowedOrigins: ["https://example.com"], // or predicate
   allowedMethods: ["GET", "POST"],
   credentials: true,
   maxAge: Duration.hours(1),
-})
+});
 ```
 
 ### Tracer Configuration
 
 ```typescript
-HttpMiddleware.withTracerDisabledWhen(predicate)   // disable per-request
-HttpMiddleware.withTracerDisabledForUrls(patterns)  // disable for URL patterns
-HttpMiddleware.withSpanNameGenerator(fn)            // custom span naming
+HttpMiddleware.withTracerDisabledWhen(predicate); // disable per-request
+HttpMiddleware.withTracerDisabledForUrls(patterns); // disable for URL patterns
+HttpMiddleware.withSpanNameGenerator(fn); // custom span naming
 ```
 
 ### Fiber References
 
 ```typescript
 // Toggle per-fiber via Effect.locally()
-HttpMiddleware.loggerDisabled
-HttpMiddleware.currentTracerDisabledWhen
+HttpMiddleware.loggerDisabled;
+HttpMiddleware.currentTracerDisabledWhen;
 ```
 
 ---
 
 ## HTTP Core Components
 
-| Module | Purpose |
-|---|---|
-| `HttpMethod` | HTTP method types (`GET`, `POST`, etc.) and guards |
-| `HttpBody` | Request/response body encoding (JSON, text, stream, form, file) |
-| `Headers` | HTTP headers utilities (get, set, merge, schema validation) |
-| `Cookies` | Cookie parsing, serialization, `CookiesRef` for state |
-| `HttpPlatform` | Platform-specific HTTP abstractions |
-| `HttpTraceContext` | W3C trace context propagation for distributed tracing |
-| `Etag` | Entity tag generation and comparison |
-| `HttpLayerRouter` | Router exposed as a Layer for composition |
-| `HttpMultiplex` | Request multiplexing across multiple apps |
+| Module             | Purpose                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `HttpMethod`       | HTTP method types (`GET`, `POST`, etc.) and guards              |
+| `HttpBody`         | Request/response body encoding (JSON, text, stream, form, file) |
+| `Headers`          | HTTP headers utilities (get, set, merge, schema validation)     |
+| `Cookies`          | Cookie parsing, serialization, `CookiesRef` for state           |
+| `HttpPlatform`     | Platform-specific HTTP abstractions                             |
+| `HttpTraceContext` | W3C trace context propagation for distributed tracing           |
+| `Etag`             | Entity tag generation and comparison                            |
+| `HttpLayerRouter`  | Router exposed as a Layer for composition                       |
+| `HttpMultiplex`    | Request multiplexing across multiple apps                       |
 
 ---
 
@@ -528,7 +531,7 @@ HttpMiddleware.currentTracerDisabledWhen
 ### Service Tag
 
 ```typescript
-Context.GenericTag<FileSystem>("@effect/platform/FileSystem")
+Context.GenericTag<FileSystem>("@effect/platform/FileSystem");
 ```
 
 ### Core Operations
@@ -547,48 +550,48 @@ FileSystem.rename(old, new)            // Effect<void, PlatformError>
 ### Directory Operations
 
 ```typescript
-FileSystem.readDirectory(path)         // Effect<Array<string>>
-FileSystem.makeDirectory(path)         // Effect<void>
-FileSystem.makeTempDirectory()         // Effect<string>
-FileSystem.makeTempDirectoryScoped()   // Effect<string, _, Scope>
+FileSystem.readDirectory(path); // Effect<Array<string>>
+FileSystem.makeDirectory(path); // Effect<void>
+FileSystem.makeTempDirectory(); // Effect<string>
+FileSystem.makeTempDirectoryScoped(); // Effect<string, _, Scope>
 ```
 
 ### Stream-based I/O
 
 ```typescript
-FileSystem.stream(path)   // Stream<Uint8Array>
-FileSystem.sink(path)     // Sink<void, Uint8Array>
-FileSystem.watch(path)    // Stream<WatchEvent>  (Create | Update | Remove)
+FileSystem.stream(path); // Stream<Uint8Array>
+FileSystem.sink(path); // Sink<void, Uint8Array>
+FileSystem.watch(path); // Stream<WatchEvent>  (Create | Update | Remove)
 ```
 
 ### File Interface
 
 ```typescript
 interface File {
-  read(buf): Effect<Size>
-  write(buf): Effect<Size>
-  readAlloc(size): Effect<Option<Uint8Array>>
-  writeAll(buf): Effect<void>
-  seek(offset, whence): Effect<void>
-  stat: Effect<File.Info>
-  sync: Effect<void>
-  truncate(length?): Effect<void>
+  read(buf): Effect<Size>;
+  write(buf): Effect<Size>;
+  readAlloc(size): Effect<Option<Uint8Array>>;
+  writeAll(buf): Effect<void>;
+  seek(offset, whence): Effect<void>;
+  stat: Effect<File.Info>;
+  sync: Effect<void>;
+  truncate(length?): Effect<void>;
 }
 ```
 
 ### Branded Types
 
 ```typescript
-type Size = bigint & Brand<"Size">
+type Size = bigint & Brand<"Size">;
 // Unit helpers: Size.KiB, Size.MiB, Size.GiB, Size.TiB, Size.PiB
 
-type FileDescriptor = number & Brand<"FileDescriptor">
+type FileDescriptor = number & Brand<"FileDescriptor">;
 ```
 
 ### Layers
 
 ```typescript
-FileSystem.layerNoop(impl)  // testing layer
+FileSystem.layerNoop(impl); // testing layer
 // Platform implementations: @effect/platform-node, @effect/platform-bun
 ```
 
@@ -601,18 +604,18 @@ FileSystem.layerNoop(impl)  // testing layer
 ### Service Tag
 
 ```typescript
-Context.GenericTag<Terminal>("@effect/platform/Terminal")
+Context.GenericTag<Terminal>("@effect/platform/Terminal");
 ```
 
 ### Key Functions
 
 ```typescript
-Terminal.columns          // Effect<number>  — terminal width
-Terminal.rows             // Effect<number>  — terminal height
-Terminal.isTTY            // Effect<boolean> — interactive check
-Terminal.readLine          // Effect<string, QuitException>
-Terminal.readInput         // Effect<ReadonlyMailbox<UserInput>, never, Scope>
-Terminal.display(text)     // Effect<void, PlatformError>
+Terminal.columns; // Effect<number>  — terminal width
+Terminal.rows; // Effect<number>  — terminal height
+Terminal.isTTY; // Effect<boolean> — interactive check
+Terminal.readLine; // Effect<string, QuitException>
+Terminal.readInput; // Effect<ReadonlyMailbox<UserInput>, never, Scope>
+Terminal.display(text); // Effect<void, PlatformError>
 ```
 
 ### Types
@@ -632,46 +635,46 @@ class QuitException  // Ctrl+C
 ### Service Tag
 
 ```typescript
-Context.GenericTag<KeyValueStore>("@effect/platform/KeyValueStore")
+Context.GenericTag<KeyValueStore>("@effect/platform/KeyValueStore");
 ```
 
 ### Core API
 
 ```typescript
-KeyValueStore.get(key)                      // Effect<Option<string>>
-KeyValueStore.getUint8Array(key)            // Effect<Option<Uint8Array>>
-KeyValueStore.set(key, value)               // Effect<void>
-KeyValueStore.remove(key)                   // Effect<void>
-KeyValueStore.clear()                       // Effect<void>
-KeyValueStore.size                          // Effect<number>
-KeyValueStore.has(key)                      // Effect<boolean>
-KeyValueStore.modify(key, f)               // update if exists
-KeyValueStore.forSchema(schema)             // SchemaStore<A, R>
+KeyValueStore.get(key); // Effect<Option<string>>
+KeyValueStore.getUint8Array(key); // Effect<Option<Uint8Array>>
+KeyValueStore.set(key, value); // Effect<void>
+KeyValueStore.remove(key); // Effect<void>
+KeyValueStore.clear(); // Effect<void>
+KeyValueStore.size; // Effect<number>
+KeyValueStore.has(key); // Effect<boolean>
+KeyValueStore.modify(key, f); // update if exists
+KeyValueStore.forSchema(schema); // SchemaStore<A, R>
 ```
 
 ### SchemaStore (Typed Variant)
 
 ```typescript
-const store = KeyValueStore.forSchema(UserSchema)
-store.get(key)   // Effect<Option<User>, ParseError | PlatformError>
-store.set(key, user)
+const store = KeyValueStore.forSchema(UserSchema);
+store.get(key); // Effect<Option<User>, ParseError | PlatformError>
+store.set(key, user);
 ```
 
 ### Layers
 
 ```typescript
-KeyValueStore.layerMemory                   // in-memory Map
-KeyValueStore.layerFileSystem(directory)     // file-based (requires FileSystem + Path)
-KeyValueStore.layerStorage(evaluate)         // Web Storage API wrapper
-KeyValueStore.layerSchema(schema, tagId)     // tagged layer for typed store
+KeyValueStore.layerMemory; // in-memory Map
+KeyValueStore.layerFileSystem(directory); // file-based (requires FileSystem + Path)
+KeyValueStore.layerStorage(evaluate); // Web Storage API wrapper
+KeyValueStore.layerSchema(schema, tagId); // tagged layer for typed store
 ```
 
 ### Composition
 
 ```typescript
-KeyValueStore.prefix(store, "myapp:")       // prefixed view
-KeyValueStore.make(impl)                    // fill derived methods from primitives
-KeyValueStore.makeStringOnly(impl)          // base64 encoding for binary in string-only backends
+KeyValueStore.prefix(store, "myapp:"); // prefixed view
+KeyValueStore.make(impl); // fill derived methods from primitives
+KeyValueStore.makeStringOnly(impl); // base64 encoding for binary in string-only backends
 ```
 
 ---
@@ -701,27 +704,27 @@ const piped = Command.pipeTo(
 ### CommandExecutor (Service)
 
 ```typescript
-Context.Tag<CommandExecutor, CommandExecutor>
+Context.Tag<CommandExecutor, CommandExecutor>;
 
-CommandExecutor.exitCode(cmd)              // Effect<ExitCode>
-CommandExecutor.start(cmd)                 // Effect<Process, PlatformError, Scope>
-CommandExecutor.string(cmd)                // Effect<string>
-CommandExecutor.lines(cmd)                 // Effect<Array<string>>
-CommandExecutor.stream(cmd)                // Stream<Uint8Array>
-CommandExecutor.streamLines(cmd)           // Stream<string>
+CommandExecutor.exitCode(cmd); // Effect<ExitCode>
+CommandExecutor.start(cmd); // Effect<Process, PlatformError, Scope>
+CommandExecutor.string(cmd); // Effect<string>
+CommandExecutor.lines(cmd); // Effect<Array<string>>
+CommandExecutor.stream(cmd); // Stream<Uint8Array>
+CommandExecutor.streamLines(cmd); // Stream<string>
 ```
 
 ### Process Interface
 
 ```typescript
 interface Process {
-  pid: ProcessId                            // branded number
-  exitCode: Effect<ExitCode>                // branded number
-  isRunning: Effect<boolean>
-  kill(signal?: Signal): Effect<void>       // POSIX signals
-  stdout: Stream<Uint8Array>
-  stderr: Stream<Uint8Array>
-  stdin: Sink<void, Uint8Array>
+  pid: ProcessId; // branded number
+  exitCode: Effect<ExitCode>; // branded number
+  isRunning: Effect<boolean>;
+  kill(signal?: Signal): Effect<void>; // POSIX signals
+  stdout: Stream<Uint8Array>;
+  stderr: Stream<Uint8Array>;
+  stdin: Sink<void, Uint8Array>;
 }
 ```
 
@@ -734,7 +737,7 @@ interface Process {
 ### Service Tag
 
 ```typescript
-Context.Tag<Path, Path>
+Context.Tag<Path, Path>;
 ```
 
 ### Key Functions
@@ -774,23 +777,23 @@ Socket.writer                       // Effect<write fn, never, Scope>
 ### Channel Conversion
 
 ```typescript
-Socket.toChannel()                  // Channel<Chunk<Uint8Array>, ...>
-Socket.toChannelString()            // string channel
-Socket.toChannelMap(f)              // mapped channel
+Socket.toChannel(); // Channel<Chunk<Uint8Array>, ...>
+Socket.toChannelString(); // string channel
+Socket.toChannelMap(f); // mapped channel
 ```
 
 ### WebSocket Support
 
 ```typescript
-Socket.makeWebSocket(url, options)     // Socket from WebSocket URL
-Socket.fromWebSocket(acquire, options) // Socket from WebSocket instance
-Socket.fromTransformStream(stream)     // Socket from ReadableStream/WritableStream
+Socket.makeWebSocket(url, options); // Socket from WebSocket URL
+Socket.fromWebSocket(acquire, options); // Socket from WebSocket instance
+Socket.fromTransformStream(stream); // Socket from ReadableStream/WritableStream
 ```
 
 ### Error Types
 
 ```typescript
-type SocketError = SocketGenericError | SocketCloseError
+type SocketError = SocketGenericError | SocketCloseError;
 // SocketGenericError: reason "Write" | "Read" | "Open" | "OpenTimeout"
 // SocketCloseError: code + closeReason
 ```
@@ -799,8 +802,10 @@ type SocketError = SocketGenericError | SocketCloseError
 
 ```typescript
 interface SocketServer {
-  address: Address   // TcpAddress | UnixAddress
-  run<E, R>(handler: (socket: Socket) => Effect<_, E, R>): Effect<never, SocketServerError, R>
+  address: Address; // TcpAddress | UnixAddress
+  run<E, R>(
+    handler: (socket: Socket) => Effect<_, E, R>
+  ): Effect<never, SocketServerError, R>;
 }
 ```
 
@@ -813,71 +818,71 @@ interface SocketServer {
 ### Worker Service Tags
 
 ```typescript
-PlatformWorker    // backend spawner
-WorkerManager     // pools and spawns workers
-Spawner           // worker factory function
+PlatformWorker; // backend spawner
+WorkerManager; // pools and spawns workers
+Spawner; // worker factory function
 ```
 
 ### Worker Operations
 
 ```typescript
-Worker.execute(message)              // Stream<O, E | WorkerError>  — streaming response
-Worker.executeEffect(message)        // Effect<O, E | WorkerError>  — single response
+Worker.execute(message); // Stream<O, E | WorkerError>  — streaming response
+Worker.executeEffect(message); // Effect<O, E | WorkerError>  — single response
 ```
 
 ### Worker Pools
 
 ```typescript
 Worker.makePool({
-  size: 4,                          // or minSize/maxSize for elastic
+  size: 4, // or minSize/maxSize for elastic
   concurrency: 10,
   targetUtilization: 0.8,
   timeToLive: Duration.minutes(5),
-})
+});
 ```
 
 ### WorkerRunner (Server Side)
 
 ```typescript
-PlatformRunner     // message-based worker server
+PlatformRunner; // message-based worker server
 
-WorkerRunner.make(process, options)               // raw handler
-WorkerRunner.makeSerialized(schema, handlers)      // schema-based dispatch
-WorkerRunner.launch(layer)                         // launch with close latch
+WorkerRunner.make(process, options); // raw handler
+WorkerRunner.makeSerialized(schema, handlers); // schema-based dispatch
+WorkerRunner.launch(layer); // launch with close latch
 ```
 
 ### Message Protocol
 
 ```typescript
 // Wire format: [id, type, data | cause, optional trace]
-type BackingWorker<I, O> = { send(message): Effect; run(handler): Effect }
+type BackingWorker<I, O> = { send(message): Effect; run(handler): Effect };
 ```
 
 ---
 
 ## Data Formats
 
-| Module | Purpose | Dependency |
-|---|---|---|
-| `MsgPack` | MessagePack binary codec | `msgpackr` |
-| `Multipart` | Multipart form data handling | `multipasta` |
-| `Ndjson` | Newline-delimited JSON streaming | — |
+| Module      | Purpose                          | Dependency   |
+| ----------- | -------------------------------- | ------------ |
+| `MsgPack`   | MessagePack binary codec         | `msgpackr`   |
+| `Multipart` | Multipart form data handling     | `multipasta` |
+| `Ndjson`    | Newline-delimited JSON streaming | —            |
 
 ---
 
 ## Platform Utilities
 
-| Module | Purpose |
-|---|---|
-| `PlatformConfigProvider` | ConfigProvider from file trees (`fromFileTree`) or `.env` files (`fromDotEnv`) |
-| `PlatformLogger` | File-based logger via `toFile(path, options)` — requires FileSystem |
-| `Runtime` | Runtime environment utilities |
-| `Effectify` | Convert Node.js-style callbacks to Effect |
-| `Template` | Template string utilities |
-| `Transferable` | Collect `Transferable` objects for worker `postMessage` — optional `Collector` service |
-| `Url` | URL parsing and manipulation |
-| `UrlParams` | Query parameter utilities |
-| `ChannelSchema` | Schema for channel-based communication |
+| Module                   | Purpose                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `PlatformConfigProvider` | ConfigProvider from file trees (`fromFileTree`) or `.env` files (`fromDotEnv`)         |
+| `PlatformLogger`         | File-based logger via `toFile(path, options)` — requires FileSystem                    |
+| `Runtime`                | Runtime environment utilities                                                          |
+| `Effectify`              | Convert Node.js-style callbacks to Effect                                              |
+| `Template`               | Template string utilities                                                              |
+| `Transferable`           | Collect `Transferable` objects for worker `postMessage` — optional `Collector` service |
+| `Url`                    | URL parsing and manipulation                                                           |
+| `UrlParams`              | Query parameter utilities                                                              |
+| `ChannelSchema`          | Schema for channel-based communication                                                 |
 
 ### PlatformConfigProvider Layers
 
@@ -892,14 +897,14 @@ PlatformConfigProvider.layerDotEnvAdd               // merge with existing
 
 ```typescript
 // Optional service — gracefully degrades if not provided
-Transferable.Collector    // Tag<Collector, CollectorService>
-Transferable.addAll(transferables)
-Transferable.schema(self, f)    // wrap schema to collect on encode
+Transferable.Collector; // Tag<Collector, CollectorService>
+Transferable.addAll(transferables);
+Transferable.schema(self, f); // wrap schema to collect on encode
 
 // Pre-built schemas
-Transferable.ImageData
-Transferable.MessagePort
-Transferable.Uint8Array
+Transferable.ImageData;
+Transferable.MessagePort;
+Transferable.Uint8Array;
 ```
 
 ---
@@ -936,7 +941,7 @@ interface SystemError {
 
 ```typescript
 class WorkerError extends Schema.TaggedError<WorkerError>() {
-  reason: "spawn" | "decode" | "send" | "unknown" | "encode"
+  reason: "spawn" | "decode" | "send" | "unknown" | "encode";
 }
 ```
 
@@ -952,8 +957,8 @@ Every capability is an abstract service accessed through `Context.Tag`:
 
 ```typescript
 // Two tag forms used across the package:
-Context.GenericTag<FileSystem>("@effect/platform/FileSystem")  // simpler
-Context.Tag<CommandExecutor, CommandExecutor>                    // standard
+Context.GenericTag<FileSystem>("@effect/platform/FileSystem"); // simpler
+Context.Tag<CommandExecutor, CommandExecutor>; // standard
 ```
 
 ### 2. Layer Provision
@@ -962,12 +967,12 @@ Services ship with layer constructors — pick the implementation for your platf
 
 ```typescript
 // In-memory for tests
-KeyValueStore.layerMemory
+KeyValueStore.layerMemory;
 
 // Platform-specific (from @effect/platform-node)
-NodeFileSystem.layer
-NodeTerminal.layer
-NodeHttpServer.layer({ port: 3000 })
+NodeFileSystem.layer;
+NodeTerminal.layer;
+NodeHttpServer.layer({ port: 3000 });
 ```
 
 ### 3. make() Constructor Pattern
@@ -990,10 +995,10 @@ const store = KeyValueStore.make({
 Type-safe wrappers prevent mixing up raw primitives:
 
 ```typescript
-type Size = bigint & Brand<"Size">
-type ProcessId = number & Brand<"ProcessId">
-type ExitCode = number & Brand<"ExitCode">
-type FileDescriptor = number & Brand<"FileDescriptor">
+type Size = bigint & Brand<"Size">;
+type ProcessId = number & Brand<"ProcessId">;
+type ExitCode = number & Brand<"ExitCode">;
+type FileDescriptor = number & Brand<"FileDescriptor">;
 ```
 
 ### 5. Schema Integration
@@ -1011,10 +1016,10 @@ Many functions support both data-first and data-last calling:
 
 ```typescript
 // data-first
-HttpClient.mapRequest(client, f)
+HttpClient.mapRequest(client, f);
 
 // data-last (pipeable)
-client.pipe(HttpClient.mapRequest(f))
+client.pipe(HttpClient.mapRequest(f));
 ```
 
 ### 7. Scope for Resource Management
@@ -1023,10 +1028,10 @@ File handles, server connections, and processes use `Scope` for automatic cleanu
 
 ```typescript
 // Process requires Scope — automatically killed when scope closes
-CommandExecutor.start(cmd)  // Effect<Process, PlatformError, Scope>
+CommandExecutor.start(cmd); // Effect<Process, PlatformError, Scope>
 
 // Temp directories cleaned up with scope
-FileSystem.makeTempDirectoryScoped()  // Effect<string, PlatformError, Scope>
+FileSystem.makeTempDirectoryScoped(); // Effect<string, PlatformError, Scope>
 ```
 
 ### 8. Stream/Sink for I/O
@@ -1034,10 +1039,10 @@ FileSystem.makeTempDirectoryScoped()  // Effect<string, PlatformError, Scope>
 Readable operations return `Stream`, writable operations return `Sink`:
 
 ```typescript
-FileSystem.stream(path)      // Stream<Uint8Array>
-FileSystem.sink(path)         // Sink<void, Uint8Array>
-Process.stdout                // Stream<Uint8Array>
-Process.stdin                 // Sink<void, Uint8Array>
+FileSystem.stream(path); // Stream<Uint8Array>
+FileSystem.sink(path); // Sink<void, Uint8Array>
+Process.stdout; // Stream<Uint8Array>
+Process.stdin; // Sink<void, Uint8Array>
 ```
 
 ### 9. Optional Services
@@ -1046,7 +1051,7 @@ Some services gracefully degrade when not provided:
 
 ```typescript
 // Transferable.Collector checks serviceOption — no-ops if absent
-Transferable.addAll(items)  // safe to call without Collector in context
+Transferable.addAll(items); // safe to call without Collector in context
 ```
 
 ---
@@ -1110,14 +1115,14 @@ Incoming HTTP request
 
 ```typescript
 const ServerLive = HttpApiBuilder.api(api).pipe(
-  Layer.provide(HandlerLayers),          // endpoint implementations
+  Layer.provide(HandlerLayers), // endpoint implementations
   HttpServer.serve(HttpMiddleware.logger),
   Layer.provide(NodeHttpServer.layer({ port: 3000 })),
-  Layer.provide(NodeHttpPlatform.layer),
-)
+  Layer.provide(NodeHttpPlatform.layer)
+);
 
 // Run
-Layer.launch(ServerLive)
+Layer.launch(ServerLive);
 ```
 
 ---
@@ -1128,13 +1133,13 @@ Layer.launch(ServerLive)
 
 ```typescript
 // Barrel import (most common)
-import { HttpClient, HttpServer, FileSystem } from "@effect/platform"
+import { HttpClient, HttpServer, FileSystem } from "@effect/platform";
 
 // Direct module import (tree-shakeable)
-import * as HttpClient from "@effect/platform/HttpClient"
+import * as HttpClient from "@effect/platform/HttpClient";
 
 // Platform implementation
-import { NodeHttpServer } from "@effect/platform-node"
+import { NodeHttpServer } from "@effect/platform-node";
 ```
 
 ### Common Layer Stack
@@ -1145,22 +1150,22 @@ Layer.mergeAll(
   NodeHttpServer.layer({ port: 3000 }),
   NodeFileSystem.layer,
   NodeTerminal.layer,
-  NodeHttpPlatform.layer,
-)
+  NodeHttpPlatform.layer
+);
 ```
 
 ### Module Count by Category
 
-| Category | Modules |
-|---|---|
-| HTTP API & Docs | 12 |
-| HTTP Server & Routing | 9 |
-| HTTP Client | 6 |
-| HTTP Core & Middleware | 10 |
-| Platform Services | 7 |
-| Process/Workers | 5 |
-| Data Formats | 3 |
-| URLs & Web | 3 |
-| Sockets | 2 |
-| Utilities | 4 |
-| **Total Public** | **~56** |
+| Category               | Modules |
+| ---------------------- | ------- |
+| HTTP API & Docs        | 12      |
+| HTTP Server & Routing  | 9       |
+| HTTP Client            | 6       |
+| HTTP Core & Middleware | 10      |
+| Platform Services      | 7       |
+| Process/Workers        | 5       |
+| Data Formats           | 3       |
+| URLs & Web             | 3       |
+| Sockets                | 2       |
+| Utilities              | 4       |
+| **Total Public**       | **~56** |

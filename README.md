@@ -6,7 +6,7 @@ Radix DLT multisig transaction orchestrator — propose, collect signatures, and
 
 - Docker & Docker Compose
 - Rust (2021 edition) + Cargo
-- Node.js + npm
+- Node.js + pnpm
 
 ## Quick Start
 
@@ -40,11 +40,24 @@ Runs on http://localhost:3001. Auto-applies database migrations on startup.
 
 ```bash
 cd multisig-app
-npm install             # first time only
-npm run dev
+pnpm install             # first time only
+pnpm run dev
 ```
 
 Runs on http://localhost:3000.
+
+## Development
+
+This project uses [pnpm](https://pnpm.io/) as the package manager with a workspace setup.
+
+```bash
+pnpm install              # install all dependencies
+pnpm fmt                  # format all files (oxfmt)
+pnpm fmt:check            # check formatting without writing
+pnpm lint                 # lint JS/TS files (oxlint)
+```
+
+Pre-commit hooks (via Husky + lint-staged) automatically format and lint staged files.
 
 ## Shutdown
 

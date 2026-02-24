@@ -1,3 +1,3 @@
-npx lint-staged
-(cd multisig-app && npm run check-types)
+pnpm exec lint-staged
+(cd multisig-app && pnpm run check-types)
 (cd multisig-server && cargo fmt --check)

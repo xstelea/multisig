@@ -4,14 +4,15 @@ Technical reference for the `radix-client` Rust crate (v1.0.1) — the Gateway a
 
 ## Overview
 
-| | |
-|--|--|
-| **Crate** | `radix-client` |
-| **Version** | `1.0.1` |
-| **Feature flags** | `gateway` (default), `core` (default) |
-| **Key deps** | `reqwest` (json, blocking), `serde`, `serde_json`, `serde_path_to_error`, `chrono` (serde), `rust_decimal`, `duplicate`, `maybe-async`, `log` |
+|                   |                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Crate**         | `radix-client`                                                                                                                                |
+| **Version**       | `1.0.1`                                                                                                                                       |
+| **Feature flags** | `gateway` (default), `core` (default)                                                                                                         |
+| **Key deps**      | `reqwest` (json, blocking), `serde`, `serde_json`, `serde_path_to_error`, `chrono` (serde), `rust_decimal`, `duplicate`, `maybe-async`, `log` |
 
 The crate exposes two independent API surfaces gated by features:
+
 - **`gateway`** — high-level Gateway API (entity state, transaction streams, KVS)
 - **`core`** — low-level Core API (mempool, committed transactions, raw preview)
 
@@ -386,6 +387,7 @@ pub struct RequestBuilderAsync<R> {
 ```
 
 All builders share:
+
 - **`build(&self) -> &R`** — access the underlying request struct
 - **`fetch(self)`** — terminal method; sends the POST and deserializes the response
 - Chainable setters returning `Self` or `&mut Self` depending on endpoint
@@ -405,84 +407,84 @@ let details = client
 
 ### Transaction
 
-| Type | Purpose |
-|------|---------|
-| `TransactionPreviewRequestBody` | Preview request (manifest, epoch range, nonce, signers, flags) |
-| `TransactionPreview200ResponseBody` | Preview result (encoded_receipt, `Receipt`, resource_changes, logs) |
-| `TransactionSubmitRequestBody` | Submit request (notarized_transaction_hex) |
-| `Transactionsubmit200ResponseBody` | Submit result (duplicate: bool) |
-| `CommittedTransactionInfo` | Full committed tx info (state_version, epoch, round, hashes, receipt, manifest_classes, message) |
-| `TransactionStreamRequestBody` | Stream query (filters, pagination, opt-ins) |
-| `TransactionStream200ResponseBody` | Stream result (ledger_state, items, next_cursor) |
-| `TransactionStreamOptIns` | Flags for optional data in stream responses |
-| `PreviewTransactionFlags` | use_free_credit, assume_all_signature_proofs, skip_epoch_check |
-| `Receipt` | status, fee_summary, costing_parameters, fee_source/destination, state_updates, events, output, error_message |
-| `FeeSummary` | Execution/finalization cost units, XRD costs breakdown |
-| `CostingParameters` | Unit prices, limits, loans, xrd_usd_price, tip_percentage |
-| `FeeSource` / `FeeDestination` | Vault sources and proposer/validator/burn/royalty destinations |
+| Type                                | Purpose                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `TransactionPreviewRequestBody`     | Preview request (manifest, epoch range, nonce, signers, flags)                                                |
+| `TransactionPreview200ResponseBody` | Preview result (encoded_receipt, `Receipt`, resource_changes, logs)                                           |
+| `TransactionSubmitRequestBody`      | Submit request (notarized_transaction_hex)                                                                    |
+| `Transactionsubmit200ResponseBody`  | Submit result (duplicate: bool)                                                                               |
+| `CommittedTransactionInfo`          | Full committed tx info (state_version, epoch, round, hashes, receipt, manifest_classes, message)              |
+| `TransactionStreamRequestBody`      | Stream query (filters, pagination, opt-ins)                                                                   |
+| `TransactionStream200ResponseBody`  | Stream result (ledger_state, items, next_cursor)                                                              |
+| `TransactionStreamOptIns`           | Flags for optional data in stream responses                                                                   |
+| `PreviewTransactionFlags`           | use_free_credit, assume_all_signature_proofs, skip_epoch_check                                                |
+| `Receipt`                           | status, fee_summary, costing_parameters, fee_source/destination, state_updates, events, output, error_message |
+| `FeeSummary`                        | Execution/finalization cost units, XRD costs breakdown                                                        |
+| `CostingParameters`                 | Unit prices, limits, loans, xrd_usd_price, tip_percentage                                                     |
+| `FeeSource` / `FeeDestination`      | Vault sources and proposer/validator/burn/royalty destinations                                                |
 
 ### State / Entity
 
-| Type | Purpose |
-|------|---------|
-| `StateEntityDetailsRequest` | Query entity details (addresses, aggregation_level, at_ledger_state) |
-| `StateEntityDetails200Response` | Response (ledger_state, items) |
-| `StateEntityDetailsResponseItem` | Per-entity: address, metadata, fungible/non_fungible resources, details |
-| `StateEntityDetailsResponseItemDetails` | Tagged enum: Component, FungibleResource, NonFungibleResource, FungibleVault, NonFungibleVault, Package |
-| `StateEntityDetailsResponseItemDetailsComponent` | package_address, blueprint_name, blueprint_version, state (JSON), role_assignments |
-| `StateEntityDetailsResponseItemDetailsFungibleResource` | divisibility, role_assignments, total_supply/minted/burned |
-| `StateEntityDetailsResponseItemDetailsNonFungibleResource` | role_assignments, non_fungible_id_type, total_supply/minted/burned |
-| `FungibleResourcesCollection` / `NonFungibleResourcesCollection` | Paginated resource listings |
-| `FungibleResourcesCollectionItem` | resource_address, amount, aggregation_level, explicit_metadata |
-| `EntityMetadataCollection` / `EntityMetadataItem` | Metadata key/value pairs with lock status |
-| `LedgerState` | network, state_version, proposer_round_timestamp, epoch, round |
-| `LedgerStateSelector` | Query by state_version, timestamp, epoch, or round |
+| Type                                                             | Purpose                                                                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `StateEntityDetailsRequest`                                      | Query entity details (addresses, aggregation_level, at_ledger_state)                                    |
+| `StateEntityDetails200Response`                                  | Response (ledger_state, items)                                                                          |
+| `StateEntityDetailsResponseItem`                                 | Per-entity: address, metadata, fungible/non_fungible resources, details                                 |
+| `StateEntityDetailsResponseItemDetails`                          | Tagged enum: Component, FungibleResource, NonFungibleResource, FungibleVault, NonFungibleVault, Package |
+| `StateEntityDetailsResponseItemDetailsComponent`                 | package_address, blueprint_name, blueprint_version, state (JSON), role_assignments                      |
+| `StateEntityDetailsResponseItemDetailsFungibleResource`          | divisibility, role_assignments, total_supply/minted/burned                                              |
+| `StateEntityDetailsResponseItemDetailsNonFungibleResource`       | role_assignments, non_fungible_id_type, total_supply/minted/burned                                      |
+| `FungibleResourcesCollection` / `NonFungibleResourcesCollection` | Paginated resource listings                                                                             |
+| `FungibleResourcesCollectionItem`                                | resource_address, amount, aggregation_level, explicit_metadata                                          |
+| `EntityMetadataCollection` / `EntityMetadataItem`                | Metadata key/value pairs with lock status                                                               |
+| `LedgerState`                                                    | network, state_version, proposer_round_timestamp, epoch, round                                          |
+| `LedgerStateSelector`                                            | Query by state_version, timestamp, epoch, or round                                                      |
 
 ### Key-Value Store
 
-| Type | Purpose |
-|------|---------|
-| `GetKeyValueStoreKeysRequestBody` | Query KVS keys (address, pagination, at_ledger_state) |
-| `GetKeyValueStoreKeys200ResponseBody` | Response (ledger_state, items, next_cursor) |
-| `GetKeyValueStoreDataRequestBody` | Query KVS data (address, specific keys) |
-| `GetKeyValueStoreData200ResponseBody` | Response (entries with key/value JSON) |
-| `StateKeyValueStoreDataRequestKeyItem` | Key specifier for data lookups |
-| `StateKeyValueStoreDataResponseItem` | key, value (JSON), last_updated_at_state_version, is_locked |
-| `ScryptoSborValue` | raw_hex + programmatic_json representation |
+| Type                                   | Purpose                                                     |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `GetKeyValueStoreKeysRequestBody`      | Query KVS keys (address, pagination, at_ledger_state)       |
+| `GetKeyValueStoreKeys200ResponseBody`  | Response (ledger_state, items, next_cursor)                 |
+| `GetKeyValueStoreDataRequestBody`      | Query KVS data (address, specific keys)                     |
+| `GetKeyValueStoreData200ResponseBody`  | Response (entries with key/value JSON)                      |
+| `StateKeyValueStoreDataRequestKeyItem` | Key specifier for data lookups                              |
+| `StateKeyValueStoreDataResponseItem`   | key, value (JSON), last_updated_at_state_version, is_locked |
+| `ScryptoSborValue`                     | raw_hex + programmatic_json representation                  |
 
 ### Mempool (Core)
 
-| Type | Purpose |
-|------|---------|
-| `GetMempoolList200Response` | contents: `Vec<MempoolTransactionHashes>` |
-| `MempoolTransactionHashes` | intent_hash, intent_hash_bech32m, payload_hash, payload_hash_bech32m |
-| `GetMempoolTransaction200Response` | count, payloads: `Vec<MempoolTransactionPayloads>` |
-| `MempoolTransactionPayloads` | hash, hash_bech32m, hex, error |
+| Type                               | Purpose                                                              |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| `GetMempoolList200Response`        | contents: `Vec<MempoolTransactionHashes>`                            |
+| `MempoolTransactionHashes`         | intent_hash, intent_hash_bech32m, payload_hash, payload_hash_bech32m |
+| `GetMempoolTransaction200Response` | count, payloads: `Vec<MempoolTransactionPayloads>`                   |
+| `MempoolTransactionPayloads`       | hash, hash_bech32m, hex, error                                       |
 
 ### Committed Transactions (Core)
 
-| Type | Purpose |
-|------|---------|
-| `GetCommittedTransactionsRequest` | network, from_state_version, limit, format options |
-| `CommittedTransaction` | resultant_state_identifiers, ledger_transaction, receipt, proposer_timestamp_ms |
-| `NotarizedTransaction` | hash, hash_bech32m, payload_hex, signed_intent |
-| `SignedTransactionIntent` | hash, hash_bech32m, intent |
-| `TransactionIntent` | hash, hash_bech32m, header, instructions |
-| `TransactionHeader` | network_id, epoch range, nonce, notary_is_signatory, tip_percentage |
-| `SborFormatOptions` | raw, programmatic_json |
-| `TransactionFormatOptions` | manifest, blobs, message, raw_system/notarized/ledger_transaction |
-| `SubstateFormatOptions` | raw, hash, typed, previous |
+| Type                              | Purpose                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `GetCommittedTransactionsRequest` | network, from_state_version, limit, format options                              |
+| `CommittedTransaction`            | resultant_state_identifiers, ledger_transaction, receipt, proposer_timestamp_ms |
+| `NotarizedTransaction`            | hash, hash_bech32m, payload_hex, signed_intent                                  |
+| `SignedTransactionIntent`         | hash, hash_bech32m, intent                                                      |
+| `TransactionIntent`               | hash, hash_bech32m, header, instructions                                        |
+| `TransactionHeader`               | network_id, epoch range, nonce, notary_is_signatory, tip_percentage             |
+| `SborFormatOptions`               | raw, programmatic_json                                                          |
+| `TransactionFormatOptions`        | manifest, blobs, message, raw_system/notarized/ledger_transaction               |
+| `SubstateFormatOptions`           | raw, hash, typed, previous                                                      |
 
 ### Common
 
-| Type | Purpose |
-|------|---------|
-| `PublicKey` | key_type: `PublicKeyType`, key_hex: `String` |
-| `EntityReference` | entity_type, is_global, entity_address |
-| `Event` | name, emitter (`EventEmitterIdentifier`), data (JSON) |
-| `SborData` | hex, programmatic_json |
-| `GetGatewayStatus200Response` | ledger_state, release_info |
-| `ReleaseInfo` | release_version, open_api_schema_version, image_tag |
+| Type                          | Purpose                                               |
+| ----------------------------- | ----------------------------------------------------- |
+| `PublicKey`                   | key_type: `PublicKeyType`, key_hex: `String`          |
+| `EntityReference`             | entity_type, is_global, entity_address                |
+| `Event`                       | name, emitter (`EventEmitterIdentifier`), data (JSON) |
+| `SborData`                    | hex, programmatic_json                                |
+| `GetGatewayStatus200Response` | ledger_state, release_info                            |
+| `ReleaseInfo`                 | release_version, open_api_schema_version, image_tag   |
 
 ## Key Enums
 
@@ -538,13 +540,13 @@ Core `EntityType` is identical minus `GlobalAccountLocker`.
 
 ### Other
 
-| Enum | Variants |
-|------|----------|
-| `ModuleId` | `Main`, `Metadata`, `Royalty`, `RoleAssignment` |
-| `PackageVmType` | `Native`, `ScryptoV1` |
-| `LocalTypeIdKind` | `WellKnown`, `SchemaLocal` |
-| `PlaintextMessageContent` | `String { value }`, `Binary { value_hex }` |
-| `Status` (Core) | `Succeeded` (default), `Failed`, `Rejected` |
+| Enum                      | Variants                                        |
+| ------------------------- | ----------------------------------------------- |
+| `ModuleId`                | `Main`, `Metadata`, `Royalty`, `RoleAssignment` |
+| `PackageVmType`           | `Native`, `ScryptoV1`                           |
+| `LocalTypeIdKind`         | `WellKnown`, `SchemaLocal`                      |
+| `PlaintextMessageContent` | `String { value }`, `Binary { value_hex }`      |
+| `Status` (Core)           | `Succeeded` (default), `Failed`, `Rejected`     |
 
 ## Error Handling
 

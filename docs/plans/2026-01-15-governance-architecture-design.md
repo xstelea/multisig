@@ -61,11 +61,11 @@ A hybrid on-ledger/off-ledger system for Radix community governance:
 
 ### Trust Model
 
-| Layer | Trust Level | Verification |
-|-------|-------------|--------------|
-| On-ledger (contracts) | Trustless | Anyone can read/verify state |
-| Off-chain (backend) | Verifiable | Deterministic calculation from public inputs |
-| External (Gateway) | Trusted | Radix's official API |
+| Layer                 | Trust Level | Verification                                 |
+| --------------------- | ----------- | -------------------------------------------- |
+| On-ledger (contracts) | Trustless   | Anyone can read/verify state                 |
+| Off-chain (backend)   | Verifiable  | Deterministic calculation from public inputs |
+| External (Gateway)    | Trusted     | Radix's official API                         |
 
 ## On-Ledger Components
 
@@ -125,13 +125,13 @@ pub struct Proposal {
 
 #### API
 
-| Method | Auth | Description |
-|--------|------|-------------|
-| `instantiate()` | PUBLIC | Create governance component with owner badge |
-| `make_temperature_check()` | PUBLIC | Create temp check (requires XRD threshold) |
-| `make_proposal()` | OWNER | Elevate passed temp check to RFP |
-| `vote_on_temperature_check()` | PUBLIC | Vote For/Against elevation |
-| `vote_on_proposal()` | PUBLIC | Vote on RFP options |
+| Method                        | Auth   | Description                                  |
+| ----------------------------- | ------ | -------------------------------------------- |
+| `instantiate()`               | PUBLIC | Create governance component with owner badge |
+| `make_temperature_check()`    | PUBLIC | Create temp check (requires XRD threshold)   |
+| `make_proposal()`             | OWNER  | Elevate passed temp check to RFP             |
+| `vote_on_temperature_check()` | PUBLIC | Vote For/Against elevation                   |
+| `vote_on_proposal()`          | PUBLIC | Vote on RFP options                          |
 
 ### VoteDelegation Component
 
@@ -154,10 +154,10 @@ pub struct Delegation {
 
 #### API
 
-| Method | Auth | Description |
-|--------|------|-------------|
-| `make_delegation()` | PUBLIC | Delegate voting power (caller must be present) |
-| `remove_delegation()` | PUBLIC | Remove delegation to specific account |
+| Method                | Auth   | Description                                    |
+| --------------------- | ------ | ---------------------------------------------- |
+| `make_delegation()`   | PUBLIC | Delegate voting power (caller must be present) |
+| `remove_delegation()` | PUBLIC | Remove delegation to specific account          |
 
 ## Off-Chain Backend (Effect)
 
@@ -177,12 +177,12 @@ pub struct Delegation {
 
 ### Tech Stack
 
-| Layer | Tech | Rationale |
-|-------|------|-----------|
-| API | Effect + @effect/platform | Type-safe errors, composable services |
-| Database | Postgres via @effect/sql | Effect-native SQL |
-| Queue | Effect Schedule + Queue | Built-in retry/backoff |
-| Gateway | Wrapped in Effect Service | Testable, typed errors |
+| Layer    | Tech                      | Rationale                             |
+| -------- | ------------------------- | ------------------------------------- |
+| API      | Effect + @effect/platform | Type-safe errors, composable services |
+| Database | Postgres via @effect/sql  | Effect-native SQL                     |
+| Queue    | Effect Schedule + Queue   | Built-in retry/backoff                |
+| Gateway  | Wrapped in Effect Service | Testable, typed errors                |
 
 ### Vote Counting Pipeline
 
@@ -224,18 +224,19 @@ POST /admin/recalculate/:id        # Trigger recalculation
 
 ### Data Sources by Feature
 
-| Feature | Source | Rationale |
-|---------|--------|-----------|
-| List proposals | Backend API | Faster, includes results |
-| Proposal details | Backend API | Includes vote totals |
-| Cast vote | Contract (wallet) | Trustless |
-| Set delegation | Contract (wallet) | Trustless |
-| View my votes | Contract (read) | Verify recording |
-| View my delegation | Contract (read) | Verify setup |
+| Feature            | Source            | Rationale                |
+| ------------------ | ----------------- | ------------------------ |
+| List proposals     | Backend API       | Faster, includes results |
+| Proposal details   | Backend API       | Includes vote totals     |
+| Cast vote          | Contract (wallet) | Trustless                |
+| Set delegation     | Contract (wallet) | Trustless                |
+| View my votes      | Contract (read)   | Verify recording         |
+| View my delegation | Contract (read)   | Verify setup             |
 
 ### User Flows
 
 **Voting:**
+
 1. View proposal (backend)
 2. Select choice, click "Vote"
 3. Wallet prompts for signature
@@ -243,6 +244,7 @@ POST /admin/recalculate/:id        # Trigger recalculation
 5. Frontend polls until results update
 
 **Delegation:**
+
 1. Enter delegatee + percentage + expiry
 2. Wallet prompts for signature
 3. Transaction submitted
@@ -252,21 +254,21 @@ POST /admin/recalculate/:id        # Trigger recalculation
 
 ### On-Chain (Contract Enforced)
 
-| Scenario | Handling |
-|----------|----------|
-| Vote after deadline | Contract rejects |
-| Vote on non-existent proposal | Contract rejects |
-| Delegation exceeds 100% | Contract rejects |
-| Double vote | Contract rejects (no vote changing) |
+| Scenario                      | Handling                            |
+| ----------------------------- | ----------------------------------- |
+| Vote after deadline           | Contract rejects                    |
+| Vote on non-existent proposal | Contract rejects                    |
+| Delegation exceeds 100%       | Contract rejects                    |
+| Double vote                   | Contract rejects (no vote changing) |
 
 ### Off-Chain (Effect Error Types)
 
-| Scenario | Error Type | Handling |
-|----------|------------|----------|
-| Gateway timeout | GatewayError | Retry with backoff |
-| Partial data | IncompleteDataError | Mark "calculating", retry later |
-| LSU conversion fails | LsuConversionError | Log, skip, flag for review |
-| Circular delegation | DelegationCycleError | Exclude cycle participants |
+| Scenario             | Error Type           | Handling                        |
+| -------------------- | -------------------- | ------------------------------- |
+| Gateway timeout      | GatewayError         | Retry with backoff              |
+| Partial data         | IncompleteDataError  | Mark "calculating", retry later |
+| LSU conversion fails | LsuConversionError   | Log, skip, flag for review      |
+| Circular delegation  | DelegationCycleError | Exclude cycle participants      |
 
 ## Testing Strategy
 

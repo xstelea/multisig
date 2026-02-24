@@ -5,6 +5,7 @@
 The Radix Foundation is winding down in 2026. Community funds must move into a DAO-controlled multisig account. There is currently no production application for DAO members to create, sign, and submit multisig transactions. The Rust POC proves the sub-intent approach works on Stokenet, but there is no user-facing system for proposal management, signature collection, or transaction submission.
 
 DAO representatives need a way to:
+
 - Propose arbitrary actions on the multisig treasury (withdrawals, access rule changes, any method call)
 - Review and sign proposals via the Radix Wallet
 - Track signature progress toward the required threshold

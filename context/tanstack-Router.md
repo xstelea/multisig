@@ -5,6 +5,7 @@
 TanStack Router is a **fully type-safe**, **client-side** router with first-class support for SSR, streaming, file-based routing, search param validation, and data loading. The codebase is a monorepo of ~38 packages. Core routing logic lives in `router-core` (framework-agnostic), with framework adapters (`react-router`, `solid-router`, `vue-router`) and a full-stack layer (`start-*`).
 
 Key packages:
+
 - `router-core` — RouterCore class, route definition, matching, state, history, search params, SSR
 - `react-router` — React bindings (hooks, Link, error boundaries, useBlocker)
 - `router-generator` — file-based route tree codegen
@@ -71,17 +72,17 @@ Uses `@tanstack/store` `Store<RouterState>` on client, synchronous `createServer
 
 ```ts
 interface RouterState<TRouteTree extends AnyRoute = AnyRoute> {
-  status: 'pending' | 'idle'
-  loadedAt: number
-  isLoading: boolean
-  isTransitioning: boolean
-  matches: Array<RouteMatch>            // currently active committed matches
-  pendingMatches?: Array<RouteMatch>    // matches being loaded for next location
-  cachedMatches: Array<RouteMatch>      // recently exited matches kept for gcTime
-  location: ParsedLocation<FullSearchSchema<TRouteTree>>
-  resolvedLocation?: ParsedLocation     // last successfully loaded location
-  statusCode: number
-  redirect?: AnyRedirect
+  status: "pending" | "idle";
+  loadedAt: number;
+  isLoading: boolean;
+  isTransitioning: boolean;
+  matches: Array<RouteMatch>; // currently active committed matches
+  pendingMatches?: Array<RouteMatch>; // matches being loaded for next location
+  cachedMatches: Array<RouteMatch>; // recently exited matches kept for gcTime
+  location: ParsedLocation<FullSearchSchema<TRouteTree>>;
+  resolvedLocation?: ParsedLocation; // last successfully loaded location
+  statusCode: number;
+  redirect?: AnyRedirect;
 }
 ```
 
@@ -89,28 +90,28 @@ interface RouterState<TRouteTree extends AnyRoute = AnyRoute> {
 
 ```ts
 interface RouteMatch {
-  id: string                        // routeId + interpolatedPath + loaderDepsHash
-  routeId: string
-  fullPath: string
-  index: number
-  pathname: string                  // interpolated (params substituted)
-  params: Record<string, string>
-  status: 'pending' | 'success' | 'error' | 'redirected' | 'notFound'
-  isFetching: false | 'beforeLoad' | 'loader'
-  error: unknown
-  loaderData?: unknown
-  context: Record<string, unknown>  // merged routerContext + routeContext + beforeLoadContext
-  search: Record<string, unknown>
-  loaderDeps: Record<string, unknown>
-  cause: 'preload' | 'enter' | 'stay'
-  preload: boolean
-  invalid: boolean
-  fetchCount: number
-  abortController: AbortController
-  meta?: Array<RouterManagedTag>    // from head()
-  links?: Array<RouterManagedTag>
-  headScripts?: Array<RouterManagedTag>
-  staticData: StaticDataRouteOption
+  id: string; // routeId + interpolatedPath + loaderDepsHash
+  routeId: string;
+  fullPath: string;
+  index: number;
+  pathname: string; // interpolated (params substituted)
+  params: Record<string, string>;
+  status: "pending" | "success" | "error" | "redirected" | "notFound";
+  isFetching: false | "beforeLoad" | "loader";
+  error: unknown;
+  loaderData?: unknown;
+  context: Record<string, unknown>; // merged routerContext + routeContext + beforeLoadContext
+  search: Record<string, unknown>;
+  loaderDeps: Record<string, unknown>;
+  cause: "preload" | "enter" | "stay";
+  preload: boolean;
+  invalid: boolean;
+  fetchCount: number;
+  abortController: AbortController;
+  meta?: Array<RouterManagedTag>; // from head()
+  links?: Array<RouterManagedTag>;
+  headScripts?: Array<RouterManagedTag>;
+  staticData: StaticDataRouteOption;
 }
 ```
 
@@ -118,12 +119,12 @@ interface RouteMatch {
 
 ```ts
 interface RouterEvents {
-  onBeforeNavigate: NavigationEventInfo
-  onBeforeLoad:     NavigationEventInfo
-  onLoad:           NavigationEventInfo
-  onResolved:       NavigationEventInfo
-  onBeforeRouteMount: NavigationEventInfo
-  onRendered:       NavigationEventInfo
+  onBeforeNavigate: NavigationEventInfo;
+  onBeforeLoad: NavigationEventInfo;
+  onLoad: NavigationEventInfo;
+  onResolved: NavigationEventInfo;
+  onBeforeRouteMount: NavigationEventInfo;
+  onRendered: NavigationEventInfo;
 }
 // NavigationEventInfo = { fromLocation?, toLocation, pathChanged, hrefChanged, hashChanged }
 ```
@@ -165,9 +166,9 @@ export interface Register {
 }
 
 // User augments in their app:
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface Register {
-    router: typeof router
+    router: typeof router;
   }
 }
 ```
@@ -179,21 +180,29 @@ declare module '@tanstack/react-router' {
 Recursively flattens the route tree into a union of all route types:
 
 ```ts
-type ParseRoute<TRouteTree, TAcc = TRouteTree> =
-  TRouteTree extends { types: { children: infer TChildren } }
-    ? unknown extends TChildren
-      ? TAcc
-      : TChildren extends ReadonlyArray<any>
-        ? ParseRoute<TChildren[number], TAcc | TChildren[number]>
-        : ParseRoute<TChildren[keyof TChildren], TAcc | TChildren[keyof TChildren]>
-    : TAcc
+type ParseRoute<TRouteTree, TAcc = TRouteTree> = TRouteTree extends {
+  types: { children: infer TChildren };
+}
+  ? unknown extends TChildren
+    ? TAcc
+    : TChildren extends ReadonlyArray<any>
+      ? ParseRoute<TChildren[number], TAcc | TChildren[number]>
+      : ParseRoute<
+          TChildren[keyof TChildren],
+          TAcc | TChildren[keyof TChildren]
+        >
+  : TAcc;
 ```
 
 ### RoutesById / RoutesByPath
 
 ```ts
-type CodeRoutesById<TRouteTree> = { [K in ParseRoute<TRouteTree> as K['id']]: K }
-type RoutesByPath<TRouteTree> = { [K in ParseRoute<TRouteTree> as K['fullPath']]: K }
+type CodeRoutesById<TRouteTree> = {
+  [K in ParseRoute<TRouteTree> as K["id"]]: K;
+};
+type RoutesByPath<TRouteTree> = {
+  [K in ParseRoute<TRouteTree> as K["fullPath"]]: K;
+};
 ```
 
 For file-based routes, these resolve from `InferFileRouteTypes<TRouteTree>` → `fileRoutesById` / `fileRoutesByFullPath` written by codegen.
@@ -238,12 +247,12 @@ Written by the generator onto the root route's `types.fileRouteTypes`:
 
 ```ts
 interface FileRouteTypes {
-  fileRoutesByFullPath: Record<string, Route>
-  fullPaths: string              // union
-  to: string                     // navigable "to" paths
-  fileRoutesByTo: Record<string, Route>
-  id: string                     // union of all IDs
-  fileRoutesById: Record<string, Route>
+  fileRoutesByFullPath: Record<string, Route>;
+  fullPaths: string; // union
+  to: string; // navigable "to" paths
+  fileRoutesByTo: Record<string, Route>;
+  id: string; // union of all IDs
+  fileRoutesById: Record<string, Route>;
 }
 ```
 
@@ -270,6 +279,7 @@ Created via `createRoute(options)` or `createRootRoute(options)`.
 Composed of `BaseRouteOptions & UpdatableRouteOptions`:
 
 **Core lifecycle options:**
+
 ```ts
 {
   validateSearch?: SearchValidator      // search param validation
@@ -283,6 +293,7 @@ Composed of `BaseRouteOptions & UpdatableRouteOptions`:
 ```
 
 **Component + behavior options:**
+
 ```ts
 {
   component?: unknown
@@ -316,15 +327,21 @@ Composed of `BaseRouteOptions & UpdatableRouteOptions`:
 ### Route ID Computation
 
 During `init()`:
+
 ```ts
-const id = joinPaths([parentRoute.id === rootRouteId ? '' : parentRoute.id, customId])
-const fullPath = id === rootRouteId ? '/' : joinPaths([parentRoute.fullPath, path])
-this._to = trimPathRight(fullPath)  // removes trailing slash
+const id = joinPaths([
+  parentRoute.id === rootRouteId ? "" : parentRoute.id,
+  customId,
+]);
+const fullPath =
+  id === rootRouteId ? "/" : joinPaths([parentRoute.fullPath, path]);
+this._to = trimPathRight(fullPath); // removes trailing slash
 ```
 
 ### Code-Based vs File-Based
 
 **Code-based:**
+
 ```ts
 const rootRoute = createRootRoute({ component: RootComponent })
 const blogRoute = createRoute({ getParentRoute: () => rootRoute, path: 'blog' })
@@ -341,7 +358,7 @@ const routeTree = rootRoute.addChildren([blogRoute.addChildren([postRoute])])
 ### SearchSchemaInput Marker Type
 
 ```ts
-type SearchSchemaInput = { __TSearchSchemaInput__: 'TSearchSchemaInput' }
+type SearchSchemaInput = { __TSearchSchemaInput__: "TSearchSchemaInput" };
 ```
 
 When `validateSearch` accepts a param typed with `SearchSchemaInput`, the input type becomes the "input schema" (for `<Link search={...}>` type-checking), separate from the output/validated type.
@@ -350,30 +367,34 @@ When `validateSearch` accepts a param typed with `SearchSchemaInput`, the input 
 
 ```ts
 type SearchValidator<TInput, TOutput> =
-  | ValidatorFn<TInput, TOutput>          // (input) => output
-  | ValidatorObj<TInput, TOutput>         // { parse: (input) => output }
-  | ValidatorAdapter<TInput, TOutput>     // { types: { input, output }, parse: (input) => output }
-  | StandardSchemaValidator<TInput, TOutput>  // { '~standard': { validate, types? } }
+  | ValidatorFn<TInput, TOutput> // (input) => output
+  | ValidatorObj<TInput, TOutput> // { parse: (input) => output }
+  | ValidatorAdapter<TInput, TOutput> // { types: { input, output }, parse: (input) => output }
+  | StandardSchemaValidator<TInput, TOutput>; // { '~standard': { validate, types? } }
 ```
 
 **Shape 1 — Plain function:**
+
 ```ts
-validateSearch: (search) => ({ page: Number(search.page) || 1 })
+validateSearch: (search) => ({ page: Number(search.page) || 1 });
 ```
 
 **Shape 2 — Object with parse (Zod v3, etc.):**
+
 ```ts
-validateSearch: z.object({ page: z.number() })  // has .parse()
+validateSearch: z.object({ page: z.number() }); // has .parse()
 ```
 
 **Shape 3 — ValidatorAdapter (library adapters):**
+
 ```ts
 validateSearch: { types: { input: ..., output: ... }, parse: (input) => output }
 ```
 
 **Shape 4 — Standard Schema (Valibot, ArkType, Zod v4 via `~standard`):**
+
 ```ts
-validateSearch: v.object({ page: v.number() })
+validateSearch: v.object({ page: v.number() });
 ```
 
 Runtime dispatch checks in order: `'~standard' in v` → `'parse' in v` → `typeof v === 'function'`.
@@ -383,8 +404,10 @@ Runtime dispatch checks in order: `'~standard' in v` → `'parse' in v` → `typ
 During `matchRoutesInternal`, each route's validated search is **merged on top of parent's**:
 
 ```ts
-const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch })
-preMatchSearch = { ...parentSearch, ...strictSearch }
+const strictSearch = validateSearch(route.options.validateSearch, {
+  ...parentSearch,
+});
+preMatchSearch = { ...parentSearch, ...strictSearch };
 ```
 
 Type: `fullSearchSchema = IntersectAssign<parentFullSearchSchema, thisRouteSchema>`.
@@ -393,30 +416,34 @@ Type: `fullSearchSchema = IntersectAssign<parentFullSearchSchema, thisRouteSchem
 
 ```ts
 type SearchMiddlewareContext<TSearchSchema> = {
-  search: TSearchSchema
-  next: (newSearch: TSearchSchema) => TSearchSchema
-}
-type SearchMiddleware<TSearchSchema> = (ctx: SearchMiddlewareContext<TSearchSchema>) => TSearchSchema
+  search: TSearchSchema;
+  next: (newSearch: TSearchSchema) => TSearchSchema;
+};
+type SearchMiddleware<TSearchSchema> = (
+  ctx: SearchMiddlewareContext<TSearchSchema>
+) => TSearchSchema;
 ```
 
 Declared: `search: { middlewares: [...] }` on route options.
 
 Chain built during `buildLocation` / `applySearchMiddleware`:
+
 1. All middlewares from root to leaf concatenated
 2. Final "terminal" middleware applies the navigation's `dest.search` transform
 3. Standard middleware pipeline: `middleware({ search, next })`
 
 **Built-in helpers** (`searchMiddleware.ts`):
+
 ```ts
-retainSearchParams(keys | true)    // carry specified keys forward across navigations
-stripSearchParams(defaults | keys | true)  // remove optional/default-valued keys
+retainSearchParams(keys | true); // carry specified keys forward across navigations
+stripSearchParams(defaults | keys | true); // remove optional/default-valued keys
 ```
 
 ### Serialization
 
 ```ts
-const defaultParseSearch = parseSearchWith(JSON.parse)
-const defaultStringifySearch = stringifySearchWith(JSON.stringify, JSON.parse)
+const defaultParseSearch = parseSearchWith(JSON.parse);
+const defaultStringifySearch = stringifySearchWith(JSON.stringify, JSON.parse);
 ```
 
 Uses `qss.decode()` for query string parsing, then attempts `JSON.parse` on each string value. Customizable via `stringifySearch` / `parseSearch` router options.
@@ -440,12 +467,17 @@ route.options.loader(ctx)           ctx.context = full merged context
 ```
 
 Each level receives parent's merged context. Types tracked via:
+
 ```ts
-type ResolveAllContext<TParentRoute, TRouterContext, TRouteContextFn, TBeforeLoadFn> =
-  Assign<
-    BeforeLoadContextParameter<TParentRoute, TRouterContext, TRouteContextFn>,
-    ContextAsyncReturnType<TBeforeLoadFn>
-  >
+type ResolveAllContext<
+  TParentRoute,
+  TRouterContext,
+  TRouteContextFn,
+  TBeforeLoadFn,
+> = Assign<
+  BeforeLoadContextParameter<TParentRoute, TRouterContext, TRouteContextFn>,
+  ContextAsyncReturnType<TBeforeLoadFn>
+>;
 ```
 
 ### beforeLoad (async, serial)
@@ -498,32 +530,41 @@ Return value is `JSON.stringify()`-ed into `loaderDepsHash` → part of `matchId
 - Uses `replaceEqualDeep` structural sharing for reference identity stability
 
 `clearExpiredCache()` runs after each `load()`:
+
 ```ts
 const gcTime = match.preload
   ? (route.options.preloadGcTime ?? router.options.defaultPreloadGcTime)
-  : (route.options.gcTime ?? router.options.defaultGcTime) ?? 5 * 60 * 1000
-const gcEligible = Date.now() - match.updatedAt >= gcTime
+  : (route.options.gcTime ?? router.options.defaultGcTime ?? 5 * 60 * 1000);
+const gcEligible = Date.now() - match.updatedAt >= gcTime;
 ```
 
 ### defer() for Streaming
 
 ```ts
-const TSR_DEFERRED_PROMISE = Symbol.for('TSR_DEFERRED_PROMISE')
+const TSR_DEFERRED_PROMISE = Symbol.for("TSR_DEFERRED_PROMISE");
 
 type DeferredPromise<T> = Promise<T> & {
-  [TSR_DEFERRED_PROMISE]: { status: 'pending' | 'resolved' | 'rejected', data?, error? }
-}
+  [TSR_DEFERRED_PROMISE]: {
+    status: "pending" | "resolved" | "rejected";
+    data?;
+    error?;
+  };
+};
 
-function defer<T>(promise: Promise<T>, options?: { serializeError? }): DeferredPromise<T>
+function defer<T>(
+  promise: Promise<T>,
+  options?: { serializeError? }
+): DeferredPromise<T>;
 ```
 
 Usage:
+
 ```ts
 loader: async () => {
-  const critical = await fetchCritical()
-  const streamed = defer(fetchSlow())   // NOT awaited
-  return { critical, streamed }
-}
+  const critical = await fetchCritical();
+  const streamed = defer(fetchSlow()); // NOT awaited
+  return { critical, streamed };
+};
 ```
 
 Client uses `<Await>` component (calls `useAwaited`) to suspend on the deferred promise.
@@ -579,11 +620,12 @@ Marks matches as `{ invalid: true }` (with optional filter). If `forcePending` o
 ### Link Component (react-router)
 
 ```ts
-type LinkProps = ActiveLinkOptions & LinkPropsChildren
+type LinkProps = ActiveLinkOptions & LinkPropsChildren;
 // children: ReactNode | ((state: { isActive, isTransitioning }) => ReactNode)
 ```
 
 **Key props:**
+
 - `to` — destination route path (type-safe)
 - `from` — base for relative navigation
 - `params`, `search`, `hash`, `state` — all type-safe per route
@@ -598,11 +640,13 @@ type LinkProps = ActiveLinkOptions & LinkPropsChildren
 - `mask` — location masking config
 
 **Preloading strategies:**
+
 - `'intent'` — preloads on `mouseEnter` / `focus`; uses `preloadDelay` timeout, cancels on leave
 - `'render'` — preloads immediately via `useEffect` on mount (once via `hasRenderFetched` ref)
 - `'viewport'` — uses `IntersectionObserver` (100px rootMargin) to preload when visible
 
 **Active state detection:**
+
 - Exact: `exactPathTest(current, next, basepath)`
 - Fuzzy: `current.startsWith(next) && ('/' follows OR same length)`
 - Search comparison: `deepEqual(current.search, next.search, { partial: !exact })`
@@ -645,18 +689,18 @@ type LinkProps = ActiveLinkOptions & LinkPropsChildren
 
 ### Naming Conventions
 
-| File/Segment | Type | Effect |
-|---|---|---|
-| `__root.tsx` | Root route | Root of all routes |
-| `index.tsx` | Index | Renders at exact parent path |
-| `route.tsx` | Layout | Layout for parent path segment |
-| `$param` | Dynamic | URL parameter segment |
-| `$...name` | Splat | Catch-all parameter |
-| `_prefix` | Pathless layout | No URL contribution, wraps children |
-| `(group)` | Route group | Organization only, no URL contribution |
-| `.lazy.tsx` | Lazy chunk | Split into separate bundle |
-| `[bracket]` | Escape | Literal segment (escapes special meaning) |
-| `-prefix` | Ignored | Excluded from route tree |
+| File/Segment | Type            | Effect                                    |
+| ------------ | --------------- | ----------------------------------------- |
+| `__root.tsx` | Root route      | Root of all routes                        |
+| `index.tsx`  | Index           | Renders at exact parent path              |
+| `route.tsx`  | Layout          | Layout for parent path segment            |
+| `$param`     | Dynamic         | URL parameter segment                     |
+| `$...name`   | Splat           | Catch-all parameter                       |
+| `_prefix`    | Pathless layout | No URL contribution, wraps children       |
+| `(group)`    | Route group     | Organization only, no URL contribution    |
+| `.lazy.tsx`  | Lazy chunk      | Split into separate bundle                |
+| `[bracket]`  | Escape          | Literal segment (escapes special meaning) |
+| `-prefix`    | Ignored         | Excluded from route tree                  |
 
 FsRouteType enum: `'__root' | 'static' | 'layout' | 'pathless_layout' | 'lazy'`
 
@@ -681,6 +725,7 @@ Uses **Babel AST transforms** to produce three virtual module types per route fi
 ### Reference File (the real file)
 
 `compileCodeSplitReferenceRoute` — for each splittable key:
+
 - Adds `const $$splitComponentImporter = () => import('./route?tsr-split=component')`
 - Replaces prop value with `lazyRouteComponent($$splitComponentImporter, 'component')`
 - For `loader`: uses `lazyFn($$splitLoaderImporter, 'loader')`
@@ -714,26 +759,27 @@ Per-route override: `codeSplitGroupings: [['component', 'pendingComponent'], ['l
 
 ```ts
 interface DehydratedMatch {
-  i: string        // match.id
-  b?: any          // __beforeLoadContext
-  l?: any          // loaderData
-  e?: any          // error
-  u: number        // updatedAt
-  s: string        // status
-  ssr?: any
+  i: string; // match.id
+  b?: any; // __beforeLoadContext
+  l?: any; // loaderData
+  e?: any; // error
+  u: number; // updatedAt
+  s: string; // status
+  ssr?: any;
 }
 
 interface DehydratedRouter {
-  manifest?: Manifest
-  dehydratedData?: any
-  lastMatchId?: string
-  matches: Array<DehydratedMatch>
+  manifest?: Manifest;
+  dehydratedData?: any;
+  lastMatchId?: string;
+  matches: Array<DehydratedMatch>;
 }
 ```
 
 ### Server: ScriptBuffer + Dehydration
 
 `attachRouterServerSsrUtils` sets up `router.serverSsr`:
+
 - `dehydrate()` — calls `crossSerializeStream` (seroval) on `DehydratedRouter`; each chunk enqueued to `ScriptBuffer`
 - `injectHtml(html)` — buffers HTML, emits `onInjectedHtml`
 - `injectScript(script)` — wraps in `<script>`, calls `injectHtml`
@@ -745,6 +791,7 @@ interface DehydratedRouter {
 ### transformStreamWithRouter
 
 Wraps the app `ReadableStream`:
+
 1. Subscribes to `router.onInjectedHtml` — buffers router HTML
 2. Scans each chunk for `TSR_SCRIPT_BARRIER_ID` → calls `liftScriptBarrier()`
 3. Scans for `</body>` → captures closing tags, flushes router HTML before them
@@ -757,20 +804,21 @@ Wraps the app `ReadableStream`:
 
 ```ts
 interface TsrSsrGlobal {
-  router?: DehydratedRouter
-  h: () => void          // signal hydration complete
-  e: () => void          // signal stream ended
-  c: () => void          // cleanup
-  p: (script: () => void) => void  // push to buffer or execute
-  buffer: Array<() => void>
-  t?: Map<string, (value: any) => any>  // custom transformers
-  initialized?: boolean
-  hydrated?: boolean
-  streamEnded?: boolean
+  router?: DehydratedRouter;
+  h: () => void; // signal hydration complete
+  e: () => void; // signal stream ended
+  c: () => void; // cleanup
+  p: (script: () => void) => void; // push to buffer or execute
+  buffer: Array<() => void>;
+  t?: Map<string, (value: any) => any>; // custom transformers
+  initialized?: boolean;
+  hydrated?: boolean;
+  streamEnded?: boolean;
 }
 ```
 
 `hydrate(router)`:
+
 1. Reads `window.$_TSR.router`
 2. Calls `router.matchRoutes()`, loads route chunks in parallel
 3. `hydrateMatch()` populates `loaderData`, `__beforeLoadContext`, `error`
@@ -788,18 +836,18 @@ interface TsrSsrGlobal {
 ### createMiddleware (fluent builder)
 
 ```ts
-const authMiddleware = createMiddleware({ type: 'request' })
+const authMiddleware = createMiddleware({ type: "request" })
   .middleware([otherMiddleware])
   .server(async ({ context, next, request, pathname }) => {
     // server-side phase
-    const result = await next({ context: { ...context, user } })
-    return result
+    const result = await next({ context: { ...context, user } });
+    return result;
   })
   .client(async ({ context, next, data }) => {
     // client-side phase (function middleware only)
-    const result = await next({ context: { ...context } })
-    return result
-  })
+    const result = await next({ context: { ...context } });
+    return result;
+  });
 ```
 
 **Request middleware** can return a `Response` directly to short-circuit.
@@ -809,20 +857,22 @@ const authMiddleware = createMiddleware({ type: 'request' })
 ### Context Accumulation
 
 Each `next({ context: additionalCtx })` merges into accumulated context via `IntersectAssign`. Types track this via:
+
 - `AssignAllServerFnContext<TRegister, TMiddlewares, TSendContext, TServerContext>`
 - `AssignAllServerRequestContext<TRegister, TMiddlewares, ...>`
 
 ### Execution Model
 
 Standard onion model:
+
 ```ts
 function executeMiddleware(middlewares, ctx) {
   async function dispatch(i, ctx) {
-    const middleware = middlewares[i]
-    if (!middleware) return ctx
-    return await middleware({ ...ctx, next: (ctx) => dispatch(i + 1, ctx) })
+    const middleware = middlewares[i];
+    if (!middleware) return ctx;
+    return await middleware({ ...ctx, next: (ctx) => dispatch(i + 1, ctx) });
   }
-  return dispatch(0, ctx)
+  return dispatch(0, ctx);
 }
 ```
 
@@ -840,26 +890,26 @@ function executeMiddleware(middlewares, ctx) {
 
 ```ts
 interface RouterHistory {
-  location: HistoryLocation
-  length: number
-  subscribers: Set<(opts: { location, action }) => void>
-  subscribe: (cb) => () => void
-  push: (path, state?, opts?) => void
-  replace: (path, state?, opts?) => void
-  go: (index, opts?) => void
-  back: (opts?) => void
-  forward: (opts?) => void
-  canGoBack: () => boolean
-  createHref: (href) => string
-  block: (blocker: NavigationBlocker) => () => void
-  flush: () => void       // immediately commit pending URL change
-  destroy: () => void
-  notify: (action) => void
+  location: HistoryLocation;
+  length: number;
+  subscribers: Set<(opts: { location; action }) => void>;
+  subscribe: (cb) => () => void;
+  push: (path, state?, opts?) => void;
+  replace: (path, state?, opts?) => void;
+  go: (index, opts?) => void;
+  back: (opts?) => void;
+  forward: (opts?) => void;
+  canGoBack: () => boolean;
+  createHref: (href) => string;
+  block: (blocker: NavigationBlocker) => () => void;
+  flush: () => void; // immediately commit pending URL change
+  destroy: () => void;
+  notify: (action) => void;
 }
 
 interface ParsedHistoryState {
-  __TSR_key?: string
-  __TSR_index: number  // monotonically increasing, for back/forward detection
+  __TSR_key?: string;
+  __TSR_index: number; // monotonically increasing, for back/forward detection
 }
 ```
 
@@ -868,21 +918,26 @@ interface ParsedHistoryState {
 The key optimization — batches rapid navigations:
 
 ```ts
-let next: { href, state, isPush } | undefined
-let scheduled: Promise<void> | undefined
+let next: { href; state; isPush } | undefined;
+let scheduled: Promise<void> | undefined;
 
 const queueHistoryAction = (type, destHref, state) => {
-  currentLocation = parseHref(destHref, state)  // update in-memory immediately
-  next = { href, state, isPush: next?.isPush || type === 'push' }
+  currentLocation = parseHref(destHref, state); // update in-memory immediately
+  next = { href, state, isPush: next?.isPush || type === "push" };
   if (!scheduled) {
-    scheduled = Promise.resolve().then(() => flush())
+    scheduled = Promise.resolve().then(() => flush());
   }
-}
+};
 
 const flush = () => {
-  (next.isPush ? history.pushState : history.replaceState)(next.state, '', next.href)
-  next = undefined; scheduled = undefined
-}
+  (next.isPush ? history.pushState : history.replaceState)(
+    next.state,
+    "",
+    next.href
+  );
+  next = undefined;
+  scheduled = undefined;
+};
 ```
 
 Multiple `navigate()` calls in the same sync tick → **one** browser history entry. `isPush` uses `||` to prefer push if any call was push.
@@ -898,12 +953,13 @@ Pure in-memory for SSR/testing. Array-based push/replace/go. **No** microtask ba
 ### History State Augmentation
 
 `router-core` augments `@tanstack/history`:
+
 ```ts
-declare module '@tanstack/history' {
+declare module "@tanstack/history" {
   interface HistoryState {
-    __tempLocation?: HistoryLocation   // for route masking
-    __tempKey?: string                 // masked location lifetime
-    __hashScrollIntoViewOptions?: boolean | ScrollIntoViewOptions
+    __tempLocation?: HistoryLocation; // for route masking
+    __tempKey?: string; // masked location lifetime
+    __hashScrollIntoViewOptions?: boolean | ScrollIntoViewOptions;
   }
 }
 ```
@@ -917,7 +973,10 @@ declare module '@tanstack/history' {
 `sessionStorage` under key `tsr-scroll-restoration-v1_3` (versioned).
 
 ```ts
-type ScrollRestorationByKey = Record<string, Record<string, { scrollX: number; scrollY: number }>>
+type ScrollRestorationByKey = Record<
+  string,
+  Record<string, { scrollX: number; scrollY: number }>
+>;
 // outer key: route location key (TSR_key or href)
 // inner key: CSS selector or 'window'
 ```
@@ -955,18 +1014,18 @@ scrollToTopSelectors?: Array<string | (() => Element | null | undefined)>
 ```ts
 type UseBlockerOpts<TRouter, TWithResolver extends boolean> = {
   shouldBlockFn: (args: {
-    current: ShouldBlockFnLocation   // { routeId, fullPath, pathname, params, search }
-    next: ShouldBlockFnLocation
-    action: HistoryAction
-  }) => boolean | Promise<boolean>
-  enableBeforeUnload?: boolean | (() => boolean)
-  disabled?: boolean
-  withResolver?: TWithResolver
-}
+    current: ShouldBlockFnLocation; // { routeId, fullPath, pathname, params, search }
+    next: ShouldBlockFnLocation;
+    action: HistoryAction;
+  }) => boolean | Promise<boolean>;
+  enableBeforeUnload?: boolean | (() => boolean);
+  disabled?: boolean;
+  withResolver?: TWithResolver;
+};
 
 function useBlocker<TWithResolver = false>(
   opts: UseBlockerOpts<TRouter, TWithResolver>
-): TWithResolver extends true ? BlockerResolver : void
+): TWithResolver extends true ? BlockerResolver : void;
 ```
 
 ### withResolver Pattern
@@ -986,7 +1045,7 @@ When blocked, a `Promise<boolean>` is created. `proceed()` calls `resolve(false)
 ```ts
 function Block<TWithResolver extends boolean>(
   opts: UseBlockerOpts & { children?: ReactNode | ((resolver) => ReactNode) }
-): React.ReactNode
+): React.ReactNode;
 ```
 
 Blocker registered via `history.block({ blockerFn, enableBeforeUnload })`. `beforeunload` handler checks blockers for tab close. Back/forward detection uses `__TSR_index` comparison.
@@ -1010,10 +1069,10 @@ head?: (ctx: AssetFnContextOptions) => Awaitable<{
 
 ```ts
 type RouterManagedTag =
-  | { tag: 'title'; attrs?: Record<string, any>; children: string }
-  | { tag: 'meta' | 'link'; attrs?: Record<string, any>; children?: never }
-  | { tag: 'script'; attrs?: Record<string, any>; children?: string }
-  | { tag: 'style'; attrs?: Record<string, any>; children?: string }
+  | { tag: "title"; attrs?: Record<string, any>; children: string }
+  | { tag: "meta" | "link"; attrs?: Record<string, any>; children?: never }
+  | { tag: "script"; attrs?: Record<string, any>; children?: string }
+  | { tag: "style"; attrs?: Record<string, any>; children?: string };
 ```
 
 ### Aggregation Strategy (useTags → HeadContent)
@@ -1054,11 +1113,25 @@ physical(pathPrefix: string, directory: string): PhysicalSubtree
 ### Types
 
 ```ts
-type VirtualRouteNode = IndexRoute | LayoutRoute | Route | PhysicalSubtree
-type IndexRoute       = { type: 'index'; file: string }
-type LayoutRoute      = { type: 'layout'; id?: string; file: string; children?: VirtualRouteNode[] }
-type Route            = { type: 'route'; file?: string; path: string; children?: VirtualRouteNode[] }
-type PhysicalSubtree  = { type: 'physical'; directory: string; pathPrefix: string }
+type VirtualRouteNode = IndexRoute | LayoutRoute | Route | PhysicalSubtree;
+type IndexRoute = { type: "index"; file: string };
+type LayoutRoute = {
+  type: "layout";
+  id?: string;
+  file: string;
+  children?: VirtualRouteNode[];
+};
+type Route = {
+  type: "route";
+  file?: string;
+  path: string;
+  children?: VirtualRouteNode[];
+};
+type PhysicalSubtree = {
+  type: "physical";
+  directory: string;
+  pathPrefix: string;
+};
 ```
 
 ### PhysicalSubtree Bridge
@@ -1094,7 +1167,7 @@ Per-match rendering order:
 ### notFound() Function
 
 ```ts
-function notFound(options: NotFoundError = {}): NotFoundError
+function notFound(options: NotFoundError = {}): NotFoundError;
 // NotFoundError = {
 //   data?: any
 //   throw?: boolean           // throws instead of returns
@@ -1108,9 +1181,11 @@ Sets `isNotFound = true` as sentinel. Check with `isNotFound(obj)`.
 ### Error Propagation
 
 For errors:
+
 1. Route's own `errorComponent` → parent's → root's → `DefaultErrorComponent`
 
 For 404s:
+
 1. Route's `notFoundComponent` → parent's → root's → `DefaultGlobalNotFound` (`<p>Not Found</p>`)
 
 `notFoundMode: 'fuzzy'` (default) allows any route to handle 404s. `'root'` forces all 404s to the root route.
@@ -1133,30 +1208,30 @@ For 404s:
 
 ## Key Source File Locations
 
-| Topic | Package | Path |
-|---|---|---|
-| Router class + state | router-core | `src/router.ts` |
-| Route definition | router-core | `src/route.ts` |
-| Route type utilities | router-core | `src/routeInfo.ts` |
-| ParsePathParams + Link types | router-core | `src/link.ts` |
-| Search params parsing | router-core | `src/searchParams.ts` |
-| Search middleware | router-core | `src/searchMiddleware.ts` |
-| Match loading | router-core | `src/load-matches.ts` |
-| History abstraction | history | `src/index.ts` |
-| Scroll restoration | router-core | `src/scroll-restoration.ts` |
-| Not-found utilities | router-core | `src/not-found.ts` |
-| SSR server dehydration | router-core | `src/ssr/ssr-server.ts` |
-| SSR stream transform | router-core | `src/ssr/ssr-client.ts` |
-| SSR types | router-core | `src/ssr/types.ts` |
-| File-based route config | router-generator | `src/config.ts` |
-| FS route scanner | router-generator | `src/filesystem/physical/getRouteNodes.ts` |
-| Route tree generator | router-generator | `src/generator.ts` |
-| Code splitting transforms | router-plugin | `src/core/code-splitter/compilers.ts` |
-| Virtual routes API | virtual-file-routes | `src/api.ts` |
-| Link component | react-router | `src/link.tsx` |
-| useBlocker | react-router | `src/useBlocker.tsx` |
-| CatchBoundary | react-router | `src/CatchBoundary.tsx` |
-| CatchNotFound | react-router | `src/not-found.tsx` |
-| HeadContent + useTags | react-router | `src/headContentUtils.tsx` |
-| Start middleware | start-client-core | `src/createMiddleware.ts` |
-| Middleware execution | start-server-core | `src/createStartHandler.ts` |
+| Topic                        | Package             | Path                                       |
+| ---------------------------- | ------------------- | ------------------------------------------ |
+| Router class + state         | router-core         | `src/router.ts`                            |
+| Route definition             | router-core         | `src/route.ts`                             |
+| Route type utilities         | router-core         | `src/routeInfo.ts`                         |
+| ParsePathParams + Link types | router-core         | `src/link.ts`                              |
+| Search params parsing        | router-core         | `src/searchParams.ts`                      |
+| Search middleware            | router-core         | `src/searchMiddleware.ts`                  |
+| Match loading                | router-core         | `src/load-matches.ts`                      |
+| History abstraction          | history             | `src/index.ts`                             |
+| Scroll restoration           | router-core         | `src/scroll-restoration.ts`                |
+| Not-found utilities          | router-core         | `src/not-found.ts`                         |
+| SSR server dehydration       | router-core         | `src/ssr/ssr-server.ts`                    |
+| SSR stream transform         | router-core         | `src/ssr/ssr-client.ts`                    |
+| SSR types                    | router-core         | `src/ssr/types.ts`                         |
+| File-based route config      | router-generator    | `src/config.ts`                            |
+| FS route scanner             | router-generator    | `src/filesystem/physical/getRouteNodes.ts` |
+| Route tree generator         | router-generator    | `src/generator.ts`                         |
+| Code splitting transforms    | router-plugin       | `src/core/code-splitter/compilers.ts`      |
+| Virtual routes API           | virtual-file-routes | `src/api.ts`                               |
+| Link component               | react-router        | `src/link.tsx`                             |
+| useBlocker                   | react-router        | `src/useBlocker.tsx`                       |
+| CatchBoundary                | react-router        | `src/CatchBoundary.tsx`                    |
+| CatchNotFound                | react-router        | `src/not-found.tsx`                        |
+| HeadContent + useTags        | react-router        | `src/headContentUtils.tsx`                 |
+| Start middleware             | start-client-core   | `src/createMiddleware.ts`                  |
+| Middleware execution         | start-server-core   | `src/createStartHandler.ts`                |

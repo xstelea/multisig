@@ -5,6 +5,7 @@ A proof-of-concept that validates the end-to-end sub-intent multisig flow on Rad
 ## Goal
 
 Prove that:
+
 1. A sub-intent can be created for a DAO action (withdraw + deposit)
 2. Multiple signatures can be collected off-chain
 3. A fee payer can wrap and submit the transaction
@@ -12,14 +13,14 @@ Prove that:
 
 ## Decisions
 
-| Aspect | Choice |
-|--------|--------|
-| Network | Stokenet |
-| Language | Rust |
-| Output | Single script with step-by-step logs |
-| Persistence | None — fully self-contained runs |
-| DAO action | Withdraw + deposit via worktop |
-| Keys | Hardcoded testnet keys (pre-funded) |
+| Aspect      | Choice                               |
+| ----------- | ------------------------------------ |
+| Network     | Stokenet                             |
+| Language    | Rust                                 |
+| Output      | Single script with step-by-step logs |
+| Persistence | None — fully self-contained runs     |
+| DAO action  | Withdraw + deposit via worktop       |
+| Keys        | Hardcoded testnet keys (pre-funded)  |
 
 ## Project Structure
 
@@ -68,6 +69,7 @@ multisig-orchestrator-poc/
 ```
 
 **Phase 0 — Setup Transaction:**
+
 1. Create DAO Treasury account with access rule: `require(3 of [pk1, pk2, pk3, pk4])`
 2. Fund it with XRD from a pre-funded account
 3. Recipient is one of the signer accounts

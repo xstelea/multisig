@@ -16,11 +16,12 @@ for ((i=1; i<=$1; i++)); do
   tmpfile=$(mktemp)
   trap "rm -f $tmpfile" EXIT
 
-  docker sandbox run --credentials host claude \
+
+  claude --dangerously-skip-permissions \
     --verbose \
     --print \
     --output-format stream-json \
-    ""@docs/issues.md @progress.txt \
+    "@docs/issues.md @progress.txt \
 1. Decide which task to work on next. \
 This should be the one YOU decide has the highest priority, \
 - not necessarily the first in the list. \
@@ -30,7 +31,7 @@ This should be the one YOU decide has the highest priority, \
 ONLY WORK ON A SINGLE FEATURE. \
 If, while implementing the feature, you notice that all work \
 is complete, output <promise>COMPLETE</promise>. \
-"" \
+" \
   | grep --line-buffered '^{' \
   | tee "$tmpfile" \
   | jq --unbuffered -rj "$stream_text"

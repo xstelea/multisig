@@ -12,13 +12,13 @@ Launched on mainnet with the **Cuttlefish protocol update** (December 2024).
 
 A subintent is an independent mini-transaction that:
 
-| Property | Description |
-|----------|-------------|
-| **Identity** | Unique ID (`subtxid_...` bech32-encoded hash) |
-| **Contents** | Own manifest, messages, and intent header |
-| **Validity** | Constraints via min/max epoch or proposer timestamp |
+| Property       | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| **Identity**   | Unique ID (`subtxid_...` bech32-encoded hash)           |
+| **Contents**   | Own manifest, messages, and intent header               |
+| **Validity**   | Constraints via min/max epoch or proposer timestamp     |
 | **Commitment** | Can only be committed as part of a complete transaction |
-| **Structure** | Forms a tree with parent/child relationships |
+| **Structure**  | Forms a tree with parent/child relationships            |
 
 ## Execution Model
 
@@ -66,10 +66,10 @@ Self-contained subintents enable better wallet UX with preview-style reviews and
 
 ### dApp Toolkit Methods
 
-| Method | Purpose |
-|--------|---------|
-| `sendTransaction` | Standard transaction request |
-| `sendPreAuthorizationRequest` | Pre-authorization flow |
+| Method                        | Purpose                      |
+| ----------------------------- | ---------------------------- |
+| `sendTransaction`             | Standard transaction request |
+| `sendPreAuthorizationRequest` | Pre-authorization flow       |
 
 ## Wallet Constraints
 
@@ -81,9 +81,9 @@ The Radix Wallet currently requires:
 
 ### Review Modes
 
-| Subintent Type | Review Style |
-|----------------|--------------|
-| Self-contained | Preview-based with user guarantees |
+| Subintent Type   | Review Style                          |
+| ---------------- | ------------------------------------- |
+| Self-contained   | Preview-based with user guarantees    |
 | GeneralSubintent | Static bounds on withdrawals/deposits |
 
 ## Manifest Best Practices
@@ -142,11 +142,11 @@ Multiple users atomically succeed or fail together (e.g., group ticket purchase)
 
 ### Available Tooling
 
-| Platform | Package | Status |
-|----------|---------|--------|
-| Rust | `radix-transactions` crate | Available |
-| UniFFI (Python, Swift, Kotlin) | `radix-engine-toolkit` | Available |
-| TypeScript | Radix Engine Toolkit | **Not available** (as of Dec 2024) |
+| Platform                       | Package                    | Status                             |
+| ------------------------------ | -------------------------- | ---------------------------------- |
+| Rust                           | `radix-transactions` crate | Available                          |
+| UniFFI (Python, Swift, Kotlin) | `radix-engine-toolkit`     | Available                          |
+| TypeScript                     | Radix Engine Toolkit       | **Not available** (as of Dec 2024) |
 
 ### Partial Transaction Builder
 
@@ -171,6 +171,7 @@ let raw_bytes = partial_tx.to_raw();
 Subintent aggregation is **out-of-band** — the network mempool only operates with complete transactions.
 
 Aggregation services may request:
+
 - Specific metadata
 - `VERIFY_PARENT` instruction to restrict usage to their aggregator
 
@@ -396,14 +397,14 @@ YIELD_TO_PARENT                   // Final yield (required)
 
 ### Security Checklist
 
-| Check | Purpose |
-|-------|---------|
-| Validate instruction count | Prevent extra malicious instructions |
-| Validate instruction types | Ensure only expected operations |
-| Validate method names | Prevent calls to unexpected methods |
-| Validate resource addresses | Ensure correct tokens being moved |
-| Preview before submit | Avoid paying gas for failures |
-| Use `VERIFY_PARENT` | Restrict subintent to your aggregator only |
+| Check                       | Purpose                                    |
+| --------------------------- | ------------------------------------------ |
+| Validate instruction count  | Prevent extra malicious instructions       |
+| Validate instruction types  | Ensure only expected operations            |
+| Validate method names       | Prevent calls to unexpected methods        |
+| Validate resource addresses | Ensure correct tokens being moved          |
+| Preview before submit       | Avoid paying gas for failures              |
+| Use `VERIFY_PARENT`         | Restrict subintent to your aggregator only |
 
 ## Implementation Example: Multi-Signature Subintent
 
@@ -422,6 +423,7 @@ Source: [gguuttss/sub-intent-example](https://github.com/gguuttss/sub-intent-exa
 ```
 
 This pattern applies when:
+
 - A DAO action needs multiple signers
 - One signer uses wallet, another is programmatic
 - Final submission pays fees from a separate notary account
@@ -538,12 +540,12 @@ loop {
 
 ### Key Differences from TAOX Example
 
-| Aspect | TAOX | Multi-Sign |
-|--------|------|------------|
-| **Signatures** | Single signer (user) | Multiple signers combined |
-| **Validation** | Strict manifest validation | Trust wallet-signed content |
-| **Use case** | Delegated fees / NFT minting | DAO multisig actions |
-| **Complexity** | Parent does complex work | Parent just yields and deposits |
+| Aspect         | TAOX                         | Multi-Sign                      |
+| -------------- | ---------------------------- | ------------------------------- |
+| **Signatures** | Single signer (user)         | Multiple signers combined       |
+| **Validation** | Strict manifest validation   | Trust wallet-signed content     |
+| **Use case**   | Delegated fees / NFT minting | DAO multisig actions            |
+| **Complexity** | Parent does complex work     | Parent just yields and deposits |
 
 ### Relevance to DAO Multisig
 

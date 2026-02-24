@@ -19,10 +19,10 @@ The Radix Foundation is winding down and funds will move into a community-contro
 
 We chose **synchronous** (off-chain signature collection) over asynchronous (on-chain signature transactions):
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Synchronous | Simpler, single transaction submission | Requires orchestrator (DApp) |
-| Asynchronous | Fully on-chain, decentralized | Complex state management, multiple transactions |
+| Approach     | Pros                                   | Cons                                            |
+| ------------ | -------------------------------------- | ----------------------------------------------- |
+| Synchronous  | Simpler, single transaction submission | Requires orchestrator (DApp)                    |
+| Asynchronous | Fully on-chain, decentralized          | Complex state management, multiple transactions |
 
 The legal structure (e.g. Duna corporation or similar) provides alternative enforcement mechanisms, reducing the need for fully trustless on-chain coordination.
 
@@ -32,7 +32,7 @@ For the initial implementation, we're using a standard **account with multisig a
 
 ### Sub-Intents for Fee Handling
 
-**The Problem:** Complex access rules require more XRD to validate. A multi-signature account with a complex rule will fail *before* reaching `lock_fee` because signature validation happens first and exhausts the initial fee loan.
+**The Problem:** Complex access rules require more XRD to validate. A multi-signature account with a complex rule will fail _before_ reaching `lock_fee` because signature validation happens first and exhausts the initial fee loan.
 
 **The Solution:** Use sub-intents:
 
@@ -107,6 +107,7 @@ To prevent security issues where an attacker configures an account with a user's
 ## Example: DAO Withdrawal with Fee Payer
 
 A concrete example showing how fee locking happens in the main transaction intent (not a subintent):
+
 - **Main transaction intent**: Fee locking + orchestration (signed by submitter who pays fees)
 - **DAO treasury withdrawal subintent**: 3 of 4 signers (DAO members)
 
@@ -197,6 +198,7 @@ Orchestrator Database
 #### Phase 2: Fee Payment & Submission
 
 Once DAO threshold is met, **anyone** can pay fees. The Orchestrator handles submission:
+
 - **Fee payer**: Anyone who signs the main tx intent to authorize `lock_fee` from their account
 - **Orchestrator**: Notarizes and submits the transaction to the network
 
@@ -260,28 +262,28 @@ dApp (Frontend)                         Orchestrator (Backend)
 
 #### Flow Summary
 
-| Phase | Step | Actor | Action |
-|-------|------|-------|--------|
-| **1** | 1 | dApp | Requests dao_withdraw manifest from Orchestrator |
-| | 2 | **Orchestrator** | Creates & returns manifest |
-| | 3 | dApp | Sends to wallet via `sendPreAuthorizationRequest` |
-| | 4 | Wallet | DAO member signs |
-| | 5 | dApp | Posts signed hex to Orchestrator |
-| | 6 | **Orchestrator** | Combines signatures until threshold met (3/4) |
-| **2** | 7 | **Fee payer** | Requests main tx with their account for lock_fee |
-| | 8 | **Orchestrator** | Builds main tx intent with lock_fee + dao_withdraw subintent |
-| | 9 | **Fee payer** | Signs main tx intent (authorizes lock_fee) |
-| | 10 | **Orchestrator** | Notarizes & submits to network |
+| Phase | Step | Actor            | Action                                                       |
+| ----- | ---- | ---------------- | ------------------------------------------------------------ |
+| **1** | 1    | dApp             | Requests dao_withdraw manifest from Orchestrator             |
+|       | 2    | **Orchestrator** | Creates & returns manifest                                   |
+|       | 3    | dApp             | Sends to wallet via `sendPreAuthorizationRequest`            |
+|       | 4    | Wallet           | DAO member signs                                             |
+|       | 5    | dApp             | Posts signed hex to Orchestrator                             |
+|       | 6    | **Orchestrator** | Combines signatures until threshold met (3/4)                |
+| **2** | 7    | **Fee payer**    | Requests main tx with their account for lock_fee             |
+|       | 8    | **Orchestrator** | Builds main tx intent with lock_fee + dao_withdraw subintent |
+|       | 9    | **Fee payer**    | Signs main tx intent (authorizes lock_fee)                   |
+|       | 10   | **Orchestrator** | Notarizes & submits to network                               |
 
 ### Why This Pattern?
 
-| Aspect | Rationale |
-|--------|-----------|
-| **Single subintent** | Only the DAO action requires pre-authorization; fee locking is straightforward |
-| **Fee in main intent** | `lock_fee` is called in the main tx intent, avoiding subintent complexity |
-| **Decoupled signatures** | DAO signatures collected first; submitter signs main intent at submission time |
-| **Anyone can submit** | Once DAO threshold is met, anyone willing to pay fees can complete the transaction |
-| **Simple orchestration** | Main intent just locks fees and yields to the pre-signed DAO subintent |
+| Aspect                   | Rationale                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| **Single subintent**     | Only the DAO action requires pre-authorization; fee locking is straightforward     |
+| **Fee in main intent**   | `lock_fee` is called in the main tx intent, avoiding subintent complexity          |
+| **Decoupled signatures** | DAO signatures collected first; submitter signs main intent at submission time     |
+| **Anyone can submit**    | Once DAO threshold is met, anyone willing to pay fees can complete the transaction |
+| **Simple orchestration** | Main intent just locks fees and yields to the pre-signed DAO subintent             |
 
 ## Security Considerations
 
@@ -310,6 +312,7 @@ A previously "ready" proposal can become invalid in two scenarios:
 2. **Signature expiry** — Each signer's subintent signature has an expiry time encoded in the manifest. If a signature expires before submission, **that specific signature must be re-collected**. The proposal doesn't need all signatures again—just the expired one(s).
 
 **Implementation requirements**:
+
 - Preview the composed transaction immediately before submission
 - Track individual signature expiry times
 - When a signature expires or rules change, prompt affected signers to re-sign

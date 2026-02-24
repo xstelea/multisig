@@ -6,24 +6,24 @@ Radix DLT governance dApp. Users browse proposals/temperature checks, vote with 
 
 ## Tech Stack
 
-| Layer | Tech |
-|-------|------|
-| Framework | React 19, Vite, TanStack Start |
-| Routing | TanStack Router v1.132 (file-based) |
-| State | Effect Atoms (`@effect-atom/atom-react`) |
-| Forms | TanStack Form v1.28 + Effect Schema validation |
-| UI | Radix UI primitives + shadcn/ui + CVA |
-| Styling | Tailwind CSS v4, dark/light theme |
-| Icons | Lucide React |
-| Blockchain | Radix dApp Toolkit v2.2.1 |
-| Gateway | `@radix-effects/gateway` |
-| HTTP | `@effect/platform` FetchHttpClient |
-| Toast | Sonner |
-| Markdown | react-markdown + remark-gfm + rehype-sanitize |
-| Server | Nitro (single endpoint: well-known radix JSON) |
-| Test | Vitest + Testing Library |
-| Lint | Biome (single quotes, 2-space indent, no trailing commas, no semicolons) |
-| Drawer | Vaul (mobile bottom sheet) |
+| Layer      | Tech                                                                     |
+| ---------- | ------------------------------------------------------------------------ |
+| Framework  | React 19, Vite, TanStack Start                                           |
+| Routing    | TanStack Router v1.132 (file-based)                                      |
+| State      | Effect Atoms (`@effect-atom/atom-react`)                                 |
+| Forms      | TanStack Form v1.28 + Effect Schema validation                           |
+| UI         | Radix UI primitives + shadcn/ui + CVA                                    |
+| Styling    | Tailwind CSS v4, dark/light theme                                        |
+| Icons      | Lucide React                                                             |
+| Blockchain | Radix dApp Toolkit v2.2.1                                                |
+| Gateway    | `@radix-effects/gateway`                                                 |
+| HTTP       | `@effect/platform` FetchHttpClient                                       |
+| Toast      | Sonner                                                                   |
+| Markdown   | react-markdown + remark-gfm + rehype-sanitize                            |
+| Server     | Nitro (single endpoint: well-known radix JSON)                           |
+| Test       | Vitest + Testing Library                                                 |
+| Lint       | Biome (single quotes, 2-space indent, no trailing commas, no semicolons) |
+| Drawer     | Vaul (mobile bottom sheet)                                               |
 
 Workspace deps: `shared` package (governance logic, schemas, branded types, manifest builders), `database`, `@radix-effects/gateway`, `@radix-effects/shared`.
 
@@ -82,21 +82,26 @@ server/
 The app uses two runtime creation strategies sharing a common `MemoMap` for atom deduplication:
 
 **Global runtime factory** (`makeRuntimeAtom.ts`):
+
 ```ts
 // Atom.context creates a shared context with a common MemoMap
-export const makeAtomRuntime = Atom.context({ memoMap: Atom.defaultMemoMap })
+export const makeAtomRuntime = Atom.context({ memoMap: Atom.defaultMemoMap });
 
 // Global logger layer added to ALL runtimes created from this factory
 makeAtomRuntime.addGlobalLayer(
-  Layer.provideMerge(Logger.pretty, Logger.minimumLogLevel(
-    envVars.EFFECTIVE_ENV === 'dev' ? LogLevel.Debug : LogLevel.Info
-  ))
-)
+  Layer.provideMerge(
+    Logger.pretty,
+    Logger.minimumLogLevel(
+      envVars.EFFECTIVE_ENV === "dev" ? LogLevel.Debug : LogLevel.Info
+    )
+  )
+);
 ```
 
 **Lightweight runtime** — `dappToolkitAtom.ts` uses `Atom.runtime(RadixDappToolkit.Live)` directly for wallet-only atoms that don't need the full governance stack.
 
 **Full DI runtime** — Domain atoms (TC, proposals, admin, governance params) create runtimes with the complete Layer stack:
+
 ```ts
 const runtime = makeAtomRuntime(
   Layer.mergeAll(GovernanceComponent.Default, SendTransaction.Default).pipe(
@@ -105,29 +110,32 @@ const runtime = makeAtomRuntime(
     Layer.provide(GovernanceConfigLayer),
     Layer.provide(Layer.setConfigProvider(ConfigProvider.fromJson(envVars)))
   )
-)
+);
 ```
 
 **VoteClient runtime** — Separate lightweight runtime with just HTTP client:
+
 ```ts
 const voteClientRuntime = makeAtomRuntime(
   VoteClientLive.pipe(Layer.provide(FetchHttpClient.layer))
-)
+);
 ```
 
 ### Atom Types
 
 **Read atoms** — `runtime.atom(Effect.gen(...))` for data fetching:
+
 ```ts
 export const governanceParametersAtom = runtime.atom(
   Effect.gen(function* () {
-    const governanceComponent = yield* GovernanceComponent
-    return yield* governanceComponent.getGovernanceParameters()
+    const governanceComponent = yield* GovernanceComponent;
+    return yield* governanceComponent.getGovernanceParameters();
   })
-)
+);
 ```
 
 **Parameterized atoms** — `Atom.family((param) => ...)` for pagination, by-ID lookups. Nested families for multi-param:
+
 ```ts
 export const paginatedProposalsAtom = Atom.family((page: number) =>
   Atom.family((sortOrder: SortOrder) =>
@@ -137,28 +145,30 @@ export const paginatedProposalsAtom = Atom.family((page: number) =>
 ```
 
 **Streaming atoms** — Use `Effect.fnUntraced` with `get` parameter for inter-atom deps and `get.setSelf` for push-based updates:
+
 ```ts
 export const walletDataAtom = runtime.atom(
   Effect.fnUntraced(function* (get) {
     // Convert RxJS Observable → Effect Stream → push via setSelf
     const walletData = Stream.asyncScoped<WalletData>((emit) =>
       Effect.gen(function* () {
-        const subscription = rdt.walletApi.walletData$.subscribe(
-          (data) => emit.single(data)
-        )
-        return Effect.sync(() => subscription.unsubscribe())
+        const subscription = rdt.walletApi.walletData$.subscribe((data) =>
+          emit.single(data)
+        );
+        return Effect.sync(() => subscription.unsubscribe());
       })
-    )
+    );
     yield* Stream.runForEach(
-      Stream.changesWith(walletData, /* dedup by account addresses */),
+      Stream.changesWith(walletData /* dedup by account addresses */),
       (value) => Effect.sync(() => get.setSelf(Effect.succeed(value)))
-    )
-    return rdt.walletApi.getWalletData() // initial value
+    );
+    return rdt.walletApi.getWalletData(); // initial value
   })
-)
+);
 ```
 
 **Action atoms** — `runtime.fn(Effect.fn(..., withToast({...})))` for mutations. Actions use `get.refresh(atom)` to invalidate dependent atoms after mutations:
+
 ```ts
 export const voteOnTemperatureCheckBatchAtom = runtime.fn(
   Effect.fn(function* (input, get) {
@@ -185,26 +195,29 @@ Result.builder(result)
 ### withToast Middleware
 
 Higher-order Effect wrapper using Sonner. Wraps mutation atoms with loading/success/error toasts:
+
 - `whenLoading` — string or `(args) => ReactNode` shown immediately
 - `whenSuccess` — string or `(result, args) => ReactNode` shown on completion
 - `whenFailure` — returns `Option<string>` — `Option.none()` = dismiss silently (e.g. user cancelled wallet)
 
 Failure handling pattern — match on `cause._tag === 'Fail'` then check error class:
+
 ```ts
 whenFailure: ({ cause }) => {
-  if (cause._tag === 'Fail') {
+  if (cause._tag === "Fail") {
     if (cause.error instanceof WalletErrorResponse)
-      return Option.some(cause.error.message ?? 'Wallet error')
+      return Option.some(cause.error.message ?? "Wallet error");
     if (cause.error instanceof NoAccountConnectedError)
-      return Option.some(cause.error.message)
+      return Option.some(cause.error.message);
   }
-  return Option.some('Failed')
-}
+  return Option.some("Failed");
+};
 ```
 
 ### Error Types
 
 All errors use `Data.TaggedError`:
+
 - `WalletErrorResponse` — wallet signing failures (may contain `transactionIntentHash`, `status`)
 - `UnexpectedWalletError` — unexpected promise rejection from wallet API
 - `NoAccountConnectedError` — no wallet connected
@@ -216,6 +229,7 @@ All errors use `Data.TaggedError`:
 ### ClientOnly SSR Pattern
 
 All route components using wallet state are wrapped in `ClientOnly` from TanStack Router to prevent SSR hydration issues with the Radix web component:
+
 ```ts
 function RouteComponent() {
   return <ClientOnly><ActualComponent /></ClientOnly>
@@ -227,6 +241,7 @@ function RouteComponent() {
 ### Wallet Connection
 
 `RadixDappToolkit` is an Effect `Context.Tag` wrapping `Ref<RadixDappToolkitFactory>`:
+
 - Created in `Layer.scoped` with finalizer (`rdt.destroy()`)
 - Guards against SSR: yields `BrowserNotAvailableError` if `typeof window === 'undefined'`
 - Requests at least 1 account: `DataRequestBuilder.accounts().atLeast(1)`
@@ -236,6 +251,7 @@ function RouteComponent() {
 ### Account Selection
 
 Module-level pub/sub in `selectedAccount.ts`:
+
 - `Ref.unsafeMake<Option<string>>` stores selected address (Effect Ref, outside React)
 - `Set<() => void>` listeners for `useSyncExternalStore` compatibility
 - `setSelectedAccountAddress(addr)` — imperative setter (called from `AccountSelector` component)
@@ -255,6 +271,7 @@ Module-level pub/sub in `selectedAccount.ts`:
 ### Admin Badge Check
 
 `isAdminAtom(accountAddress)` — `Atom.family` that:
+
 1. Uses `GetFungibleBalance` service to fetch account's fungible resources
 2. Checks if any resource matches `GovernanceConfig.adminBadgeAddress`
 3. Returns boolean — components individually guard themselves (no route-level guard)
@@ -262,6 +279,7 @@ Module-level pub/sub in `selectedAccount.ts`:
 ### Admin Operations
 
 All require admin badge proof (built into manifest):
+
 - `promoteToProposalAtom(temperatureCheckId)` — promotes TC to governance proposal
 - `toggleTemperatureCheckHiddenAtom(id)` — hide/unhide TC
 - `toggleProposalHiddenAtom(id)` — hide/unhide proposal
@@ -280,6 +298,7 @@ All require admin badge proof (built into manifest):
 ### On-Chain (via GovernanceComponent)
 
 Accessed via `@radix-effects/gateway` services:
+
 - Component state (TC count, proposal count, KV store addresses, governance parameters)
 - KV store data (individual TCs, proposals, per-account votes)
 - Account resource balances (for admin badge check)
@@ -288,6 +307,7 @@ Accessed via `@radix-effects/gateway` services:
 ### Vote Collector API (via VoteClient)
 
 Separate backend microservice. `VoteClient` is an Effect `Context.Tag` with two methods:
+
 - `GetVoteResults({ type, entityId })` — aggregated vote tallies per option
 - `GetAccountVotes({ type, entityId })` — individual account votes with voting power
 
@@ -295,14 +315,14 @@ Backed by `@effect/platform` `HttpClient`, responses validated with Effect Schem
 
 ## Routes & Pages
 
-| Route | Description |
-|-------|-------------|
-| `/` | Home - tabs: Proposals list + TC list. Paginated (5/page), sortable, status badges |
-| `/tc/:id` | TC detail: header, markdown body, vote results, account votes, voting UI. Admin: hide toggle, promote button |
-| `/tc/new` | Create TC form: title, descriptions, RadixTalk URL, links, vote options, max selections |
-| `/proposal/:id` | Proposal detail: same layout as TC but with multi-option voting |
-| `/about` | Governance info: TC vs GP parameter comparison, voting power explanation |
-| `/about/admin` | Admin: edit governance parameters (voting period, quorum, approval threshold for TC and GP) |
+| Route           | Description                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/`             | Home - tabs: Proposals list + TC list. Paginated (5/page), sortable, status badges                           |
+| `/tc/:id`       | TC detail: header, markdown body, vote results, account votes, voting UI. Admin: hide toggle, promote button |
+| `/tc/new`       | Create TC form: title, descriptions, RadixTalk URL, links, vote options, max selections                      |
+| `/proposal/:id` | Proposal detail: same layout as TC but with multi-option voting                                              |
+| `/about`        | Governance info: TC vs GP parameter comparison, voting power explanation                                     |
+| `/about/admin`  | Admin: edit governance parameters (voting period, quorum, approval threshold for TC and GP)                  |
 
 ### Component Hierarchy
 
@@ -351,16 +371,19 @@ TC Create (/tc/new)
 ## Voting
 
 ### Temperature Checks
+
 - Binary: "For" / "Against"
 - Revoting allowed (accounts can change vote)
 - Batch voting: all connected accounts vote sequentially (not parallel)
 
 ### Governance Proposals
+
 - Multi-option voting (custom options per proposal)
 - `maxSelections` controls single vs multi-select
 - Same batch/revote support as TCs
 
 ### Batch Vote Flow
+
 1. Loop through accounts sequentially
 2. Each: build manifest -> `SendTransaction` -> capture per-account result
 3. Collect `VoteResult[]` with `{ account, success, error? }`
@@ -381,6 +404,7 @@ Validated at startup via Effect `Schema.Class`. `local` env maps to `dev` for `E
 ## Shared Governance Layer
 
 The `shared` workspace package provides:
+
 - **GovernanceComponent** — Effect service: read proposals/TCs, build transaction manifests, paginated queries
 - **GovernanceConfig** — Effect service: component address, admin badge address, package address (network-dependent)
 - **Branded types** — `ProposalId`, `TemperatureCheckId`, `EntityId`, `EntityType`, `KeyValueStoreAddress`, `AccountAddress`

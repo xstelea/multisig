@@ -7,13 +7,16 @@ Summary of governance features requested by the community (Peachy Shawn).
 ## Governance App Features
 
 **Voting power:**
+
 - Vote based on validator-staked holdings (LSU) shown as XRD-equivalent
 
 **Vote delegation:**
+
 - Delegate to multiple people by percentage (e.g., 50% to one person, 10% to four others)
 - Delegation expiry — delegations expire after a time period (e.g., 1 year) to prevent "set and forget"
 
 **History & transparency:**
+
 - Archive of RFP voting activity numbered sequentially
 - Sorting options: by total voting power, personal stake, delegated stake
 
@@ -22,11 +25,13 @@ Summary of governance features requested by the community (Peachy Shawn).
 ## Governance Process (Proposed)
 
 **Phase 1: RFC (Request for Comment)**
+
 - Forum post on [RadixTalk Radix Community DAO](https://radixtalk.com/c/governance/radix-community-dao/)
 - Community discusses and votes on RFC
 - Thresholds TBD
 
 **Phase 2: RFP (Request for Proposal)**
+
 - If RFC passes, moves to official RFP vote in Governance App
 - Thresholds TBD
 

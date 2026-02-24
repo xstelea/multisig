@@ -5,6 +5,7 @@ Technical reference for SBOR (Scrypto Binary Object Representation), the binary 
 ## Overview
 
 SBOR is a self-describing binary codec with:
+
 - Typed binary encoding with value-kind prefixes on every value
 - Extensible custom value kinds (Scrypto, Manifest)
 - Schema system for validation and evolution tracking
@@ -20,6 +21,7 @@ SBOR is a self-describing binary codec with:
 ```
 
 Each value:
+
 ```
 [ValueKind u8] [Body...]
 ```
@@ -28,61 +30,63 @@ Body format depends on value kind.
 
 ### Payload Prefixes
 
-| Context | Prefix | Constant |
-|---------|--------|----------|
-| Basic SBOR | `0x5b` (91) | `BASIC_SBOR_V1_PAYLOAD_PREFIX` |
-| Scrypto SBOR | `0x5c` (92) | `SCRYPTO_SBOR_V1_PAYLOAD_PREFIX` |
+| Context       | Prefix      | Constant                          |
+| ------------- | ----------- | --------------------------------- |
+| Basic SBOR    | `0x5b` (91) | `BASIC_SBOR_V1_PAYLOAD_PREFIX`    |
+| Scrypto SBOR  | `0x5c` (92) | `SCRYPTO_SBOR_V1_PAYLOAD_PREFIX`  |
 | Manifest SBOR | `0x5d` (93) | `MANIFEST_SBOR_V1_PAYLOAD_PREFIX` |
 
 Max depth: 64 levels.
 
 ### Value Kind IDs
 
-| ID | Kind | Body Format |
-|----|------|-------------|
-| `0x01` | Bool | 1 byte (0x00/0x01) |
-| `0x02` | I8 | 1 byte signed |
-| `0x03` | I16 | 2 bytes LE |
-| `0x04` | I32 | 4 bytes LE |
-| `0x05` | I64 | 8 bytes LE |
-| `0x06` | I128 | 16 bytes LE |
-| `0x07` | U8 | 1 byte |
-| `0x08` | U16 | 2 bytes LE |
-| `0x09` | U32 | 4 bytes LE |
-| `0x0a` | U64 | 8 bytes LE |
-| `0x0b` | U128 | 16 bytes LE |
-| `0x0c` | String | `[size LEB128][UTF-8 bytes]` |
-| `0x20` | Array | `[element_kind u8][size LEB128][elements...]` |
-| `0x21` | Tuple | `[size LEB128][fields...]` (each field has own value kind) |
-| `0x22` | Enum | `[discriminator u8][size LEB128][fields...]` |
-| `0x23` | Map | `[key_kind u8][value_kind u8][size LEB128][k1][v1][k2][v2]...` |
-| `0x80+` | Custom | Application-defined |
+| ID      | Kind   | Body Format                                                    |
+| ------- | ------ | -------------------------------------------------------------- |
+| `0x01`  | Bool   | 1 byte (0x00/0x01)                                             |
+| `0x02`  | I8     | 1 byte signed                                                  |
+| `0x03`  | I16    | 2 bytes LE                                                     |
+| `0x04`  | I32    | 4 bytes LE                                                     |
+| `0x05`  | I64    | 8 bytes LE                                                     |
+| `0x06`  | I128   | 16 bytes LE                                                    |
+| `0x07`  | U8     | 1 byte                                                         |
+| `0x08`  | U16    | 2 bytes LE                                                     |
+| `0x09`  | U32    | 4 bytes LE                                                     |
+| `0x0a`  | U64    | 8 bytes LE                                                     |
+| `0x0b`  | U128   | 16 bytes LE                                                    |
+| `0x0c`  | String | `[size LEB128][UTF-8 bytes]`                                   |
+| `0x20`  | Array  | `[element_kind u8][size LEB128][elements...]`                  |
+| `0x21`  | Tuple  | `[size LEB128][fields...]` (each field has own value kind)     |
+| `0x22`  | Enum   | `[discriminator u8][size LEB128][fields...]`                   |
+| `0x23`  | Map    | `[key_kind u8][value_kind u8][size LEB128][k1][v1][k2][v2]...` |
+| `0x80+` | Custom | Application-defined                                            |
 
 ### Size Encoding (LEB128 variant)
 
 Variable-length, 7 bits per byte, high bit = continuation:
+
 - Max: `0x0FFFFFFF` (~268 MB)
 - Example: 300 → `0xAC 0x02`
 
 ### Type Mappings
 
-| Rust Type | SBOR Encoding |
-|-----------|---------------|
-| `struct { a, b }` | Tuple with N fields |
-| `enum { A, B(x) }` | Enum, discriminator per variant |
-| `Vec<T>` / `&[T]` | Array (element kind deduplicated) |
-| `Vec<u8>` / `&[u8]` | Array(U8) — raw bytes, no per-element overhead |
-| `BTreeMap<K,V>` / `HashMap<K,V>` | Map |
-| `Option<T>` | Enum: None=disc 0/size 0, Some=disc 1/size 1 |
-| `Result<T,E>` | Enum: Ok=disc 0, Err=disc 1 |
-| `Box<T>` / `Rc<T>` / `Arc<T>` | Transparent — encodes as inner type |
-| `(A, B, C)` | Tuple with N fields |
-| `String` | String |
-| `[T; N]` | Array with exact size N |
+| Rust Type                        | SBOR Encoding                                  |
+| -------------------------------- | ---------------------------------------------- |
+| `struct { a, b }`                | Tuple with N fields                            |
+| `enum { A, B(x) }`               | Enum, discriminator per variant                |
+| `Vec<T>` / `&[T]`                | Array (element kind deduplicated)              |
+| `Vec<u8>` / `&[u8]`              | Array(U8) — raw bytes, no per-element overhead |
+| `BTreeMap<K,V>` / `HashMap<K,V>` | Map                                            |
+| `Option<T>`                      | Enum: None=disc 0/size 0, Some=disc 1/size 1   |
+| `Result<T,E>`                    | Enum: Ok=disc 0, Err=disc 1                    |
+| `Box<T>` / `Rc<T>` / `Arc<T>`    | Transparent — encodes as inner type            |
+| `(A, B, C)`                      | Tuple with N fields                            |
+| `String`                         | String                                         |
+| `[T; N]`                         | Array with exact size N                        |
 
 ### Encoding Example
 
 Encoding `(42u32, "hi")`:
+
 ```
 5b           payload prefix (basic SBOR)
 21           VALUE_KIND_TUPLE
@@ -177,26 +181,26 @@ pub enum ValueKind<X: CustomValueKind> {
 
 ### Scrypto Custom Value Kinds
 
-| Kind | ID | Rust Type | Wire Body |
-|------|----|-----------|-----------|
-| `Reference` | `0x80` | `Reference` (wraps `NodeId`) | 30 bytes (NodeId) |
-| `Own` | `0x90` | `Own` (wraps `NodeId`) | 30 bytes (NodeId) |
-| `Decimal` | `0xa0` | `Decimal` | 24 bytes (i192 LE) |
-| `PreciseDecimal` | `0xb0` | `PreciseDecimal` | 32 bytes (i256 LE) |
-| `NonFungibleLocalId` | `0xc0` | `NonFungibleLocalId` | discriminator + variant data |
+| Kind                 | ID     | Rust Type                    | Wire Body                    |
+| -------------------- | ------ | ---------------------------- | ---------------------------- |
+| `Reference`          | `0x80` | `Reference` (wraps `NodeId`) | 30 bytes (NodeId)            |
+| `Own`                | `0x90` | `Own` (wraps `NodeId`)       | 30 bytes (NodeId)            |
+| `Decimal`            | `0xa0` | `Decimal`                    | 24 bytes (i192 LE)           |
+| `PreciseDecimal`     | `0xb0` | `PreciseDecimal`             | 32 bytes (i256 LE)           |
+| `NonFungibleLocalId` | `0xc0` | `NonFungibleLocalId`         | discriminator + variant data |
 
 ### Manifest Custom Value Kinds
 
-| Kind | ID | Description |
-|------|----|-------------|
-| `Address` | `0x80` | Global/internal address |
-| `Bucket` | `0x81` | Runtime bucket handle |
-| `Proof` | `0x82` | Runtime proof handle |
-| `Expression` | `0x83` | Manifest expression |
-| `Blob` | `0x84` | Blob reference (hash) |
-| `Decimal` | `0x85` | Financial decimal |
-| `PreciseDecimal` | `0x86` | High-precision decimal |
-| `NonFungibleLocalId` | `0x87` | NFT local ID |
+| Kind                 | ID     | Description                |
+| -------------------- | ------ | -------------------------- |
+| `Address`            | `0x80` | Global/internal address    |
+| `Bucket`             | `0x81` | Runtime bucket handle      |
+| `Proof`              | `0x82` | Runtime proof handle       |
+| `Expression`         | `0x83` | Manifest expression        |
+| `Blob`               | `0x84` | Blob reference (hash)      |
+| `Decimal`            | `0x85` | Financial decimal          |
+| `PreciseDecimal`     | `0x86` | High-precision decimal     |
+| `NonFungibleLocalId` | `0x87` | NFT local ID               |
 | `AddressReservation` | `0x88` | Address reservation handle |
 
 ### CustomExtension Trait
@@ -375,29 +379,29 @@ impl<X: CustomValueKind, E: Encoder<X>> Encode<X, E> for NonFungibleLocalId {
 
 **Encoder:**
 
-| Method | Description |
-|--------|-------------|
-| `write_value_kind(vk)` | Write value kind byte |
-| `write_discriminator(d: u8)` | Write enum discriminator |
-| `write_size(n: usize)` | Write LEB128 size |
-| `write_byte(b: u8)` | Write single byte |
-| `write_slice(&[u8])` | Write byte slice |
-| `encode(&value)` | Encode full value (kind + body), tracks depth |
-| `encode_deeper_body(&value)` | Encode body only, tracks depth |
+| Method                       | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `write_value_kind(vk)`       | Write value kind byte                         |
+| `write_discriminator(d: u8)` | Write enum discriminator                      |
+| `write_size(n: usize)`       | Write LEB128 size                             |
+| `write_byte(b: u8)`          | Write single byte                             |
+| `write_slice(&[u8])`         | Write byte slice                              |
+| `encode(&value)`             | Encode full value (kind + body), tracks depth |
+| `encode_deeper_body(&value)` | Encode body only, tracks depth                |
 
 **Decoder:**
 
-| Method | Description |
-|--------|-------------|
-| `read_value_kind()` | Read and parse value kind byte |
-| `read_discriminator()` | Read enum discriminator byte |
-| `read_size()` | Read LEB128 size |
-| `read_byte()` | Read single byte |
-| `read_slice(n)` | Read n bytes |
-| `decode::<T>()` | Decode full value (kind + body) |
-| `decode_deeper_body_with_value_kind(vk)` | Decode body, tracks depth |
-| `check_preloaded_value_kind(actual, expected)` | Verify value kind matches |
-| `read_and_check_size(expected)` | Read size and verify |
+| Method                                         | Description                     |
+| ---------------------------------------------- | ------------------------------- |
+| `read_value_kind()`                            | Read and parse value kind byte  |
+| `read_discriminator()`                         | Read enum discriminator byte    |
+| `read_size()`                                  | Read LEB128 size                |
+| `read_byte()`                                  | Read single byte                |
+| `read_slice(n)`                                | Read n bytes                    |
+| `decode::<T>()`                                | Decode full value (kind + body) |
+| `decode_deeper_body_with_value_kind(vk)`       | Decode body, tracks depth       |
+| `check_preloaded_value_kind(actual, expected)` | Verify value kind matches       |
+| `read_and_check_size(expected)`                | Read size and verify            |
 
 ## Schema System
 
@@ -509,47 +513,47 @@ validate_payload_against_schema::<ScryptoCustomExtension, _>(
 
 ### Available Derives
 
-| Derive | Implements |
-|--------|-----------|
-| `Sbor` | Categorize + Encode + Decode + Describe (generic over custom kinds) |
-| `Categorize` | `Categorize<X>` + `SborTuple`/`SborEnum` |
-| `Encode` | `Encode<X, E>` |
-| `Decode` | `Decode<X, D>` |
-| `Describe` | `Describe<C>` |
-| `BasicSbor` | All above for `NoCustomValueKind` only |
-| `BasicCategorize` | Categorize for basic SBOR |
-| `BasicEncode` | Encode for basic SBOR |
-| `BasicDecode` | Decode for basic SBOR |
-| `BasicDescribe` | Describe for basic SBOR |
-| `ScryptoSbor` | All for `ScryptoCustomValueKind` (from `radix-sbor-derive`) |
-| `ManifestSbor` | All for `ManifestCustomValueKind` (from `radix-sbor-derive`) |
+| Derive            | Implements                                                          |
+| ----------------- | ------------------------------------------------------------------- |
+| `Sbor`            | Categorize + Encode + Decode + Describe (generic over custom kinds) |
+| `Categorize`      | `Categorize<X>` + `SborTuple`/`SborEnum`                            |
+| `Encode`          | `Encode<X, E>`                                                      |
+| `Decode`          | `Decode<X, D>`                                                      |
+| `Describe`        | `Describe<C>`                                                       |
+| `BasicSbor`       | All above for `NoCustomValueKind` only                              |
+| `BasicCategorize` | Categorize for basic SBOR                                           |
+| `BasicEncode`     | Encode for basic SBOR                                               |
+| `BasicDecode`     | Decode for basic SBOR                                               |
+| `BasicDescribe`   | Describe for basic SBOR                                             |
+| `ScryptoSbor`     | All for `ScryptoCustomValueKind` (from `radix-sbor-derive`)         |
+| `ManifestSbor`    | All for `ManifestCustomValueKind` (from `radix-sbor-derive`)        |
 
 ### Type-Level Attributes
 
-| Attribute | Description |
-|-----------|-------------|
-| `#[sbor(custom_value_kind = "Path")]` | Specify custom value kind instead of generic X |
-| `#[sbor(custom_type_kind = "Path")]` | Specify custom type kind for Describe |
-| `#[sbor(transparent)]` | Delegate to single inner field (newtype pattern) |
-| `#[sbor(as_type = "Type")]` | Encode/decode by converting to/from another type |
-| `#[sbor(as_ref = "expr")]` | Conversion expression for as_type encoding (uses `self`) |
-| `#[sbor(from_value = "expr")]` | Conversion expression for as_type decoding (uses `value`) |
-| `#[sbor(type_name = "Name")]` | Override type name in schema |
-| `#[sbor(transparent_name)]` | Keep automatic name even for transparent types |
-| `#[sbor(child_types = "T1; T2")]` | Explicit child types for trait bounds |
-| `#[sbor(categorize_types = "T1")]` | Types requiring Categorize bound |
-| `#[sbor(use_repr_discriminators)]` | Use `enum Foo { A = 5 }` discriminant values |
-| `#[sbor(impl_variant_traits)]` | Generate variant-specific trait impls |
+| Attribute                             | Description                                               |
+| ------------------------------------- | --------------------------------------------------------- |
+| `#[sbor(custom_value_kind = "Path")]` | Specify custom value kind instead of generic X            |
+| `#[sbor(custom_type_kind = "Path")]`  | Specify custom type kind for Describe                     |
+| `#[sbor(transparent)]`                | Delegate to single inner field (newtype pattern)          |
+| `#[sbor(as_type = "Type")]`           | Encode/decode by converting to/from another type          |
+| `#[sbor(as_ref = "expr")]`            | Conversion expression for as_type encoding (uses `self`)  |
+| `#[sbor(from_value = "expr")]`        | Conversion expression for as_type decoding (uses `value`) |
+| `#[sbor(type_name = "Name")]`         | Override type name in schema                              |
+| `#[sbor(transparent_name)]`           | Keep automatic name even for transparent types            |
+| `#[sbor(child_types = "T1; T2")]`     | Explicit child types for trait bounds                     |
+| `#[sbor(categorize_types = "T1")]`    | Types requiring Categorize bound                          |
+| `#[sbor(use_repr_discriminators)]`    | Use `enum Foo { A = 5 }` discriminant values              |
+| `#[sbor(impl_variant_traits)]`        | Generate variant-specific trait impls                     |
 
 ### Field/Variant-Level Attributes
 
-| Attribute | Description |
-|-----------|-------------|
-| `#[sbor(skip)]` | Exclude from encoding; uses `Default::default()` on decode |
-| `#[sbor(flatten)]` | Flatten single-field variant (field must be SborTuple) |
+| Attribute                     | Description                                                    |
+| ----------------------------- | -------------------------------------------------------------- |
+| `#[sbor(skip)]`               | Exclude from encoding; uses `Default::default()` on decode     |
+| `#[sbor(flatten)]`            | Flatten single-field variant (field must be SborTuple)         |
 | `#[sbor(discriminator(val))]` | Custom variant discriminator (u8 literal, const path, or expr) |
-| `#[sbor(unreachable)]` | Variant panics if matched |
-| `#[sbor(impl_variant_trait)]` | Generate variant trait for this specific variant |
+| `#[sbor(unreachable)]`        | Variant panics if matched                                      |
+| `#[sbor(impl_variant_trait)]` | Generate variant trait for this specific variant               |
 
 ### Schema Assertion
 
@@ -571,6 +575,7 @@ Location formats: `"FILE:path"`, `"INLINE:hexstring"`, `"CONST:NAME"`, `"EXPR:fn
 ### Derive Examples
 
 **Basic struct:**
+
 ```rust
 #[derive(ScryptoSbor)]
 pub struct Transfer {
@@ -581,6 +586,7 @@ pub struct Transfer {
 ```
 
 **Enum with explicit discriminators:**
+
 ```rust
 #[derive(ScryptoSbor)]
 pub enum Status {
@@ -592,6 +598,7 @@ pub enum Status {
 ```
 
 **Transparent newtype:**
+
 ```rust
 #[derive(ScryptoSbor)]
 #[sbor(transparent)]
@@ -599,6 +606,7 @@ pub struct Wrapper(Vec<u8>);
 ```
 
 **Derive-as pattern:**
+
 ```rust
 #[derive(ScryptoSbor)]
 #[sbor(
@@ -610,6 +618,7 @@ pub struct Name(String);
 ```
 
 **With repr discriminators:**
+
 ```rust
 #[derive(ScryptoSbor)]
 #[sbor(use_repr_discriminators)]
@@ -690,6 +699,7 @@ well_known_scrypto_custom_type!(
 ```
 
 This generates:
+
 - `Categorize` → returns `ValueKind::Custom(kind)`
 - `Encode` → writes value kind + `self.to_vec()` body
 - `Decode` → reads fixed slice + `try_from`
@@ -699,32 +709,32 @@ This generates:
 
 ### EncodeError
 
-| Variant | Description |
-|---------|-------------|
-| `MaxDepthExceeded(usize)` | Nesting exceeded limit |
-| `SizeTooLarge { actual, max_allowed }` | Payload too large (>268 MB) |
-| `MismatchingArrayElementValueKind` | Array element has wrong kind |
-| `MismatchingMapKeyValueKind` | Map key has wrong kind |
-| `MismatchingMapValueValueKind` | Map value has wrong kind |
+| Variant                                | Description                  |
+| -------------------------------------- | ---------------------------- |
+| `MaxDepthExceeded(usize)`              | Nesting exceeded limit       |
+| `SizeTooLarge { actual, max_allowed }` | Payload too large (>268 MB)  |
+| `MismatchingArrayElementValueKind`     | Array element has wrong kind |
+| `MismatchingMapKeyValueKind`           | Map key has wrong kind       |
+| `MismatchingMapValueValueKind`         | Map value has wrong kind     |
 
 ### DecodeError
 
-| Variant | Description |
-|---------|-------------|
-| `BufferUnderflow { required, remaining }` | Not enough bytes |
-| `UnexpectedPayloadPrefix { expected, actual }` | Wrong prefix byte |
-| `UnexpectedValueKind { expected, actual }` | Type mismatch |
-| `UnexpectedCustomValueKind { actual }` | Unknown custom kind |
-| `UnexpectedSize { expected, actual }` | Field count mismatch |
-| `UnexpectedDiscriminator { expected, actual }` | Wrong enum variant |
-| `UnknownDiscriminator(u8)` | Enum variant doesn't exist |
-| `InvalidBool(u8)` | Bool byte not 0x00/0x01 |
-| `InvalidUtf8` | String not valid UTF-8 |
-| `InvalidSize` | LEB128 overflow |
-| `MaxDepthExceeded(usize)` | Nesting exceeded limit |
-| `DuplicateKey` | Map has duplicate keys |
-| `InvalidCustomValue` | Custom value parse failure |
-| `ExtraTrailingBytes(usize)` | Bytes remaining after decode |
+| Variant                                        | Description                  |
+| ---------------------------------------------- | ---------------------------- |
+| `BufferUnderflow { required, remaining }`      | Not enough bytes             |
+| `UnexpectedPayloadPrefix { expected, actual }` | Wrong prefix byte            |
+| `UnexpectedValueKind { expected, actual }`     | Type mismatch                |
+| `UnexpectedCustomValueKind { actual }`         | Unknown custom kind          |
+| `UnexpectedSize { expected, actual }`          | Field count mismatch         |
+| `UnexpectedDiscriminator { expected, actual }` | Wrong enum variant           |
+| `UnknownDiscriminator(u8)`                     | Enum variant doesn't exist   |
+| `InvalidBool(u8)`                              | Bool byte not 0x00/0x01      |
+| `InvalidUtf8`                                  | String not valid UTF-8       |
+| `InvalidSize`                                  | LEB128 overflow              |
+| `MaxDepthExceeded(usize)`                      | Nesting exceeded limit       |
+| `DuplicateKey`                                 | Map has duplicate keys       |
+| `InvalidCustomValue`                           | Custom value parse failure   |
+| `ExtraTrailingBytes(usize)`                    | Bytes remaining after decode |
 
 ## RawPayload & RawValue
 
@@ -772,13 +782,13 @@ impl<E: Encoder<ManifestCustomValueKind>> Encode<ManifestCustomValueKind, E> for
 
 `ManifestCustomExtension` uses `ScryptoCustomSchema` for validation. Manifest value kinds map to Scrypto type kinds:
 
-| Manifest Kind | Maps To Scrypto TypeKind |
-|---------------|--------------------------|
-| `Address` | `ScryptoCustomTypeKind::Reference` |
-| `Bucket` | `ScryptoCustomTypeKind::Own` |
-| `Proof` | `ScryptoCustomTypeKind::Own` |
-| `AddressReservation` | `ScryptoCustomTypeKind::Own` |
-| `Decimal` | `ScryptoCustomTypeKind::Decimal` |
+| Manifest Kind        | Maps To Scrypto TypeKind           |
+| -------------------- | ---------------------------------- |
+| `Address`            | `ScryptoCustomTypeKind::Reference` |
+| `Bucket`             | `ScryptoCustomTypeKind::Own`       |
+| `Proof`              | `ScryptoCustomTypeKind::Own`       |
+| `AddressReservation` | `ScryptoCustomTypeKind::Own`       |
+| `Decimal`            | `ScryptoCustomTypeKind::Decimal`   |
 
 ### Depth Tracking
 

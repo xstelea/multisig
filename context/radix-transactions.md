@@ -6,15 +6,15 @@ Technical reference for the `radix-transactions` Rust crate (v1.4.0-dev) from ra
 
 All source paths relative to `radix-transactions/src/`.
 
-| Module | Purpose |
-|--------|---------|
-| `builder/` | Transaction and manifest builders |
-| `data/` | Data conversion, formatting, transformation |
-| `errors/` | Error types (header, signature, manifest, validation) |
-| `manifest/` | Instructions, compiler, decompiler, lexer, parser, AST, static interpreter |
-| `model/` | All transaction types (V1, V2), execution model, hashing, preparation |
-| `signing/` | `Signer` trait and `PrivateKey` enum |
-| `validation/` | Transaction validator, config, signature validation, structure validation |
+| Module        | Purpose                                                                    |
+| ------------- | -------------------------------------------------------------------------- |
+| `builder/`    | Transaction and manifest builders                                          |
+| `data/`       | Data conversion, formatting, transformation                                |
+| `errors/`     | Error types (header, signature, manifest, validation)                      |
+| `manifest/`   | Instructions, compiler, decompiler, lexer, parser, AST, static interpreter |
+| `model/`      | All transaction types (V1, V2), execution model, hashing, preparation      |
+| `signing/`    | `Signer` trait and `PrivateKey` enum                                       |
+| `validation/` | Transaction validator, config, signature validation, structure validation  |
 
 **Public prelude** re-exports `builder::*`, `model::*`, `signing::{PrivateKey, Signer}`.
 
@@ -38,15 +38,15 @@ NotarizedTransactionV1
 
 **TransactionHeaderV1:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `network_id` | `u8` | Network discriminator |
-| `start_epoch_inclusive` | `Epoch` | Validity window start |
-| `end_epoch_exclusive` | `Epoch` | Validity window end |
-| `nonce` | `u32` | Uniqueness nonce |
-| `notary_public_key` | `PublicKey` | Notary's public key |
-| `notary_is_signatory` | `bool` | Whether notary counts as signer |
-| `tip_percentage` | `u16` | Validator tip (0–65535%) |
+| Field                   | Type        | Description                     |
+| ----------------------- | ----------- | ------------------------------- |
+| `network_id`            | `u8`        | Network discriminator           |
+| `start_epoch_inclusive` | `Epoch`     | Validity window start           |
+| `end_epoch_exclusive`   | `Epoch`     | Validity window end             |
+| `nonce`                 | `u32`       | Uniqueness nonce                |
+| `notary_public_key`     | `PublicKey` | Notary's public key             |
+| `notary_is_signatory`   | `bool`      | Whether notary counts as signer |
+| `tip_percentage`        | `u16`       | Validator tip (0–65535%)        |
 
 ### V2: Tree Structure with Subintents
 
@@ -69,22 +69,22 @@ NotarizedTransactionV2
 
 **TransactionHeaderV2** (simplified vs V1):
 
-| Field | Type | Note |
-|-------|------|------|
-| `notary_public_key` | `PublicKey` | |
-| `notary_is_signatory` | `bool` | |
-| `tip_basis_points` | `u32` | Replaces `tip_percentage`; max 1,000,000 |
+| Field                 | Type        | Note                                     |
+| --------------------- | ----------- | ---------------------------------------- |
+| `notary_public_key`   | `PublicKey` |                                          |
+| `notary_is_signatory` | `bool`      |                                          |
+| `tip_basis_points`    | `u32`       | Replaces `tip_percentage`; max 1,000,000 |
 
 **IntentHeaderV2** (replaces TransactionHeaderV1 fields for per-intent config):
 
-| Field | Type | Note |
-|-------|------|------|
-| `network_id` | `u8` | |
-| `start_epoch_inclusive` | `Epoch` | |
-| `end_epoch_exclusive` | `Epoch` | |
-| `intent_discriminator` | `u64` | Replaces `nonce`; use random |
-| `min_proposer_timestamp_inclusive` | `Option<Instant>` | Timestamp constraint |
-| `max_proposer_timestamp_exclusive` | `Option<Instant>` | Timestamp constraint |
+| Field                              | Type              | Note                         |
+| ---------------------------------- | ----------------- | ---------------------------- |
+| `network_id`                       | `u8`              |                              |
+| `start_epoch_inclusive`            | `Epoch`           |                              |
+| `end_epoch_exclusive`              | `Epoch`           |                              |
+| `intent_discriminator`             | `u64`             | Replaces `nonce`; use random |
+| `min_proposer_timestamp_inclusive` | `Option<Instant>` | Timestamp constraint         |
+| `max_proposer_timestamp_exclusive` | `Option<Instant>` | Timestamp constraint         |
 
 **IntentCoreV2** — shared structure for root intent and subintents:
 
@@ -115,13 +115,13 @@ All descendant subintents from nested partial transactions are flattened into on
 
 ### Version-Agnostic Types
 
-| Type | Purpose |
-|------|---------|
-| `UserTransaction` | Enum: `V1(NotarizedTransactionV1)` / `V2(NotarizedTransactionV2)` |
-| `AnyTransaction` | Enum of all transaction types (user, system, ledger, flash) |
-| `TransactionDiscriminator` | Discriminator byte enum for payload type detection |
-| `ExecutableTransaction` | Execution-ready representation |
-| `IntoExecutable` | Trait for converting to executable form |
+| Type                       | Purpose                                                           |
+| -------------------------- | ----------------------------------------------------------------- |
+| `UserTransaction`          | Enum: `V1(NotarizedTransactionV1)` / `V2(NotarizedTransactionV2)` |
+| `AnyTransaction`           | Enum of all transaction types (user, system, ledger, flash)       |
+| `TransactionDiscriminator` | Discriminator byte enum for payload type detection                |
+| `ExecutableTransaction`    | Execution-ready representation                                    |
+| `IntoExecutable`           | Trait for converting to executable form                           |
 
 ## Instructions
 
@@ -131,13 +131,13 @@ Each instruction implements the `ManifestInstruction` trait with `IDENT`, `ID`, 
 
 ### Bucket Lifecycle (V1 + V2)
 
-| Instruction | RTM Name | ID |
-|-------------|----------|------|
-| `TakeFromWorktop` | `TAKE_FROM_WORKTOP` | `0x00` |
+| Instruction                   | RTM Name                          | ID     |
+| ----------------------------- | --------------------------------- | ------ |
+| `TakeFromWorktop`             | `TAKE_FROM_WORKTOP`               | `0x00` |
 | `TakeNonFungiblesFromWorktop` | `TAKE_NON_FUNGIBLES_FROM_WORKTOP` | `0x01` |
-| `TakeAllFromWorktop` | `TAKE_ALL_FROM_WORKTOP` | `0x02` |
-| `ReturnToWorktop` | `RETURN_TO_WORKTOP` | `0x03` |
-| `BurnResource` | `BURN_RESOURCE` | `0x24` |
+| `TakeAllFromWorktop`          | `TAKE_ALL_FROM_WORKTOP`           | `0x02` |
+| `ReturnToWorktop`             | `RETURN_TO_WORKTOP`               | `0x03` |
+| `BurnResource`                | `BURN_RESOURCE`                   | `0x24` |
 
 `TakeFromWorktop` fields: `resource_address: ResourceAddress`, `amount: Decimal`.
 `TakeNonFungiblesFromWorktop` fields: `resource_address: ResourceAddress`, `ids: Vec<NonFungibleLocalId>`.
@@ -146,16 +146,16 @@ Each instruction implements the `ManifestInstruction` trait with `IDENT`, `ID`, 
 
 ### Resource Assertions
 
-| Instruction | RTM Name | ID | Version |
-|-------------|----------|------|---------|
-| `AssertWorktopContains` | `ASSERT_WORKTOP_CONTAINS` | `0x04` | V1+V2 |
-| `AssertWorktopContainsNonFungibles` | `ASSERT_WORKTOP_CONTAINS_NON_FUNGIBLES` | `0x05` | V1+V2 |
-| `AssertWorktopContainsAny` | `ASSERT_WORKTOP_CONTAINS_ANY` | `0x06` | V1+V2 |
-| `AssertWorktopResourcesOnly` | `ASSERT_WORKTOP_RESOURCES_ONLY` | `0x08` | **V2** |
-| `AssertWorktopResourcesInclude` | `ASSERT_WORKTOP_RESOURCES_INCLUDE` | `0x09` | **V2** |
-| `AssertNextCallReturnsOnly` | `ASSERT_NEXT_CALL_RETURNS_ONLY` | `0x0A` | **V2** |
-| `AssertNextCallReturnsInclude` | `ASSERT_NEXT_CALL_RETURNS_INCLUDE` | `0x0B` | **V2** |
-| `AssertBucketContents` | `ASSERT_BUCKET_CONTENTS` | `0x0C` | **V2** |
+| Instruction                         | RTM Name                                | ID     | Version |
+| ----------------------------------- | --------------------------------------- | ------ | ------- |
+| `AssertWorktopContains`             | `ASSERT_WORKTOP_CONTAINS`               | `0x04` | V1+V2   |
+| `AssertWorktopContainsNonFungibles` | `ASSERT_WORKTOP_CONTAINS_NON_FUNGIBLES` | `0x05` | V1+V2   |
+| `AssertWorktopContainsAny`          | `ASSERT_WORKTOP_CONTAINS_ANY`           | `0x06` | V1+V2   |
+| `AssertWorktopResourcesOnly`        | `ASSERT_WORKTOP_RESOURCES_ONLY`         | `0x08` | **V2**  |
+| `AssertWorktopResourcesInclude`     | `ASSERT_WORKTOP_RESOURCES_INCLUDE`      | `0x09` | **V2**  |
+| `AssertNextCallReturnsOnly`         | `ASSERT_NEXT_CALL_RETURNS_ONLY`         | `0x0A` | **V2**  |
+| `AssertNextCallReturnsInclude`      | `ASSERT_NEXT_CALL_RETURNS_INCLUDE`      | `0x0B` | **V2**  |
+| `AssertBucketContents`              | `ASSERT_BUCKET_CONTENTS`                | `0x0C` | **V2**  |
 
 V2 assertions use `ManifestResourceConstraints` (map of `ResourceAddress` → `ManifestResourceConstraint`).
 
@@ -163,34 +163,34 @@ V2 assertions use `ManifestResourceConstraints` (map of `ResourceAddress` → `M
 
 ### Proof Lifecycle (V1 + V2)
 
-| Instruction | RTM Name | ID |
-|-------------|----------|------|
-| `PopFromAuthZone` | `POP_FROM_AUTH_ZONE` | `0x10` |
-| `PushToAuthZone` | `PUSH_TO_AUTH_ZONE` | `0x11` |
-| `DropAuthZoneProofs` | `DROP_AUTH_ZONE_PROOFS` | `0x12` |
-| `DropAuthZoneRegularProofs` | `DROP_AUTH_ZONE_REGULAR_PROOFS` | `0x13` |
-| `CreateProofFromAuthZoneOfAmount` | `CREATE_PROOF_FROM_AUTH_ZONE_OF_AMOUNT` | `0x14` |
+| Instruction                             | RTM Name                                       | ID     |
+| --------------------------------------- | ---------------------------------------------- | ------ |
+| `PopFromAuthZone`                       | `POP_FROM_AUTH_ZONE`                           | `0x10` |
+| `PushToAuthZone`                        | `PUSH_TO_AUTH_ZONE`                            | `0x11` |
+| `DropAuthZoneProofs`                    | `DROP_AUTH_ZONE_PROOFS`                        | `0x12` |
+| `DropAuthZoneRegularProofs`             | `DROP_AUTH_ZONE_REGULAR_PROOFS`                | `0x13` |
+| `CreateProofFromAuthZoneOfAmount`       | `CREATE_PROOF_FROM_AUTH_ZONE_OF_AMOUNT`        | `0x14` |
 | `CreateProofFromAuthZoneOfNonFungibles` | `CREATE_PROOF_FROM_AUTH_ZONE_OF_NON_FUNGIBLES` | `0x15` |
-| `CreateProofFromAuthZoneOfAll` | `CREATE_PROOF_FROM_AUTH_ZONE_OF_ALL` | `0x16` |
-| `DropAuthZoneSignatureProofs` | `DROP_AUTH_ZONE_SIGNATURE_PROOFS` | `0x17` |
-| `CreateProofFromBucketOfAmount` | `CREATE_PROOF_FROM_BUCKET_OF_AMOUNT` | `0x21` |
-| `CreateProofFromBucketOfNonFungibles` | `CREATE_PROOF_FROM_BUCKET_OF_NON_FUNGIBLES` | `0x22` |
-| `CreateProofFromBucketOfAll` | `CREATE_PROOF_FROM_BUCKET_OF_ALL` | `0x23` |
-| `CloneProof` | `CLONE_PROOF` | `0x30` |
-| `DropProof` | `DROP_PROOF` | `0x31` |
-| `DropAllProofs` | `DROP_ALL_PROOFS` | `0x50` |
-| `DropNamedProofs` | `DROP_NAMED_PROOFS` | `0x52` |
+| `CreateProofFromAuthZoneOfAll`          | `CREATE_PROOF_FROM_AUTH_ZONE_OF_ALL`           | `0x16` |
+| `DropAuthZoneSignatureProofs`           | `DROP_AUTH_ZONE_SIGNATURE_PROOFS`              | `0x17` |
+| `CreateProofFromBucketOfAmount`         | `CREATE_PROOF_FROM_BUCKET_OF_AMOUNT`           | `0x21` |
+| `CreateProofFromBucketOfNonFungibles`   | `CREATE_PROOF_FROM_BUCKET_OF_NON_FUNGIBLES`    | `0x22` |
+| `CreateProofFromBucketOfAll`            | `CREATE_PROOF_FROM_BUCKET_OF_ALL`              | `0x23` |
+| `CloneProof`                            | `CLONE_PROOF`                                  | `0x30` |
+| `DropProof`                             | `DROP_PROOF`                                   | `0x31` |
+| `DropAllProofs`                         | `DROP_ALL_PROOFS`                              | `0x50` |
+| `DropNamedProofs`                       | `DROP_NAMED_PROOFS`                            | `0x52` |
 
 ### Invocations (V1 + V2)
 
-| Instruction | RTM Name | ID |
-|-------------|----------|------|
-| `CallFunction` | `CALL_FUNCTION` | `0x40` |
-| `CallMethod` | `CALL_METHOD` | `0x41` |
-| `CallRoyaltyMethod` | `CALL_ROYALTY_METHOD` | `0x42` |
-| `CallMetadataMethod` | `CALL_METADATA_METHOD` | `0x43` |
+| Instruction                | RTM Name                      | ID     |
+| -------------------------- | ----------------------------- | ------ |
+| `CallFunction`             | `CALL_FUNCTION`               | `0x40` |
+| `CallMethod`               | `CALL_METHOD`                 | `0x41` |
+| `CallRoyaltyMethod`        | `CALL_ROYALTY_METHOD`         | `0x42` |
+| `CallMetadataMethod`       | `CALL_METADATA_METHOD`        | `0x43` |
 | `CallRoleAssignmentMethod` | `CALL_ROLE_ASSIGNMENT_METHOD` | `0x44` |
-| `CallDirectVaultMethod` | `CALL_DIRECT_VAULT_METHOD` | `0x45` |
+| `CallDirectVaultMethod`    | `CALL_DIRECT_VAULT_METHOD`    | `0x45` |
 
 **CallFunction fields:** `package_address: ManifestPackageAddress`, `blueprint_name: String`, `function_name: String`, `args: ManifestValue`.
 
@@ -200,19 +200,19 @@ V2 assertions use `ManifestResourceConstraints` (map of `ResourceAddress` → `M
 
 ### Address Allocation (V1 + V2)
 
-| Instruction | RTM Name | ID |
-|-------------|----------|------|
+| Instruction             | RTM Name                  | ID     |
+| ----------------------- | ------------------------- | ------ |
 | `AllocateGlobalAddress` | `ALLOCATE_GLOBAL_ADDRESS` | `0x51` |
 
 Fields: `package_address: PackageAddress`, `blueprint_name: String`. Creates both an `AddressReservation` and a `NamedAddress`.
 
 ### Subintent Interaction (V2 only)
 
-| Instruction | RTM Name | ID | Fields |
-|-------------|----------|------|--------|
-| `YieldToChild` | `YIELD_TO_CHILD` | `0x61` | `child_index: ManifestNamedIntentIndex`, `args: ManifestValue` |
-| `YieldToParent` | `YIELD_TO_PARENT` | `0x60` | `args: ManifestValue` |
-| `VerifyParent` | `VERIFY_PARENT` | `0x62` | `access_rule: AccessRule` |
+| Instruction     | RTM Name          | ID     | Fields                                                         |
+| --------------- | ----------------- | ------ | -------------------------------------------------------------- |
+| `YieldToChild`  | `YIELD_TO_CHILD`  | `0x61` | `child_index: ManifestNamedIntentIndex`, `args: ManifestValue` |
+| `YieldToParent` | `YIELD_TO_PARENT` | `0x60` | `args: ManifestValue`                                          |
+| `VerifyParent`  | `VERIFY_PARENT`   | `0x62` | `access_rule: AccessRule`                                      |
 
 ## ManifestBuilder API
 
@@ -220,30 +220,30 @@ Fields: `package_address: PackageAddress`, `blueprint_name: String`. Creates bot
 
 ### Type Aliases
 
-| Alias | Manifest Type |
-|-------|---------------|
+| Alias                          | Manifest Type                            |
+| ------------------------------ | ---------------------------------------- |
 | `TransactionManifestV1Builder` | `ManifestBuilder<TransactionManifestV1>` |
 | `TransactionManifestV2Builder` | `ManifestBuilder<TransactionManifestV2>` |
-| `SubintentManifestV2Builder` | `ManifestBuilder<SubintentManifestV2>` |
+| `SubintentManifestV2Builder`   | `ManifestBuilder<SubintentManifestV2>`   |
 
 ### Constructors
 
-| Method | Returns |
-|--------|---------|
-| `ManifestBuilder::new()` | V1 builder (backwards compat) |
-| `ManifestBuilder::new_v1()` | Explicit V1 |
-| `ManifestBuilder::new_v2()` | V2 transaction manifest |
-| `ManifestBuilder::new_subintent_v2()` | V2 subintent manifest |
-| `ManifestBuilder::new_system_v1()` | System transaction |
+| Method                                | Returns                       |
+| ------------------------------------- | ----------------------------- |
+| `ManifestBuilder::new()`              | V1 builder (backwards compat) |
+| `ManifestBuilder::new_v1()`           | Explicit V1                   |
+| `ManifestBuilder::new_v2()`           | V2 transaction manifest       |
+| `ManifestBuilder::new_subintent_v2()` | V2 subintent manifest         |
+| `ManifestBuilder::new_system_v1()`    | System transaction            |
 
 ### Manifest Types
 
-| Type | Instruction Set | Has Children | is_subintent |
-|------|----------------|--------------|--------------|
-| `TransactionManifestV1` | `InstructionV1` | No | false |
-| `TransactionManifestV2` | `InstructionV2` | Yes | false |
-| `SubintentManifestV2` | `InstructionV2` | Yes | true |
-| `SystemTransactionManifestV1` | `InstructionV1` | No | false |
+| Type                          | Instruction Set | Has Children | is_subintent |
+| ----------------------------- | --------------- | ------------ | ------------ |
+| `TransactionManifestV1`       | `InstructionV1` | No           | false        |
+| `TransactionManifestV2`       | `InstructionV2` | Yes          | false        |
+| `SubintentManifestV2`         | `InstructionV2` | Yes          | true         |
+| `SystemTransactionManifestV1` | `InstructionV1` | No           | false        |
 
 ### Bucket Operations (chainable, `self -> Self`)
 
@@ -384,13 +384,13 @@ Note: `add_blob` takes `&mut self`, so use with `then()`:
 
 Builder uses named objects that map to sequential `u32` IDs in serialized form.
 
-| Object | Name Type | RTM Syntax |
-|--------|-----------|------------|
-| Bucket | `NamedManifestBucket` | `Bucket("name")` |
-| Proof | `NamedManifestProof` | `Proof("name")` |
+| Object              | Name Type                         | RTM Syntax                   |
+| ------------------- | --------------------------------- | ---------------------------- |
+| Bucket              | `NamedManifestBucket`             | `Bucket("name")`             |
+| Proof               | `NamedManifestProof`              | `Proof("name")`              |
 | Address Reservation | `NamedManifestAddressReservation` | `AddressReservation("name")` |
-| Named Address | `NamedManifestAddress` | `NamedAddress("name")` |
-| Named Intent | `NamedManifestIntent` | `NamedIntent("name")` |
+| Named Address       | `NamedManifestAddress`            | `NamedAddress("name")`       |
+| Named Intent        | `NamedManifestIntent`             | `NamedIntent("name")`        |
 
 Lifecycle: `Unregistered` → `Present(id)` → `Consumed`. Prevents reuse of consumed buckets/proofs.
 
@@ -510,13 +510,13 @@ pub struct NotarySignatureV1(pub SignatureV1);  // bare sig; pubkey in header
 
 ### Multi-Signature Limits
 
-| Limit | Value |
-|-------|-------|
-| Max signer signatures per intent | 16 |
-| Max total signature validations (V2) | 64 |
-| Duplicate signers | Error: `DuplicateSigner` |
-| V1 notary duplicating signer | Allowed (configurable) |
-| V2 notary duplicating signer | **Forbidden** |
+| Limit                                | Value                    |
+| ------------------------------------ | ------------------------ |
+| Max signer signatures per intent     | 16                       |
+| Max total signature validations (V2) | 64                       |
+| Duplicate signers                    | Error: `DuplicateSigner` |
+| V1 notary duplicating signer         | Allowed (configurable)   |
+| V2 notary duplicating signer         | **Forbidden**            |
 
 Builder support: `sign(signer)` (one), `multi_sign(signers)` (batch), `signer_signatures(sigs)` (pre-computed).
 
@@ -532,6 +532,7 @@ pub struct TransactionValidator {
 ```
 
 Constructors:
+
 - `new(database, network)` — reads config from substate database
 - `new_with_latest_config(network)` — uses latest config
 - `new_for_latest_simulator()` — latest config + simulator network
@@ -542,20 +543,20 @@ Constructors:
 
 Key limits (Cuttlefish values):
 
-| Parameter | Value |
-|-----------|-------|
-| `max_signer_signatures_per_intent` | 16 |
-| `max_references_per_intent` | 512 |
-| `max_instructions` | 1000 |
-| `max_epoch_range` | ~30 days |
-| `max_subintent_depth` | 3 |
-| `max_total_signature_validations` | 64 |
-| `max_total_references` | 512 |
-| `max_user_payload_length` | 1 MB |
-| `max_child_subintents_per_intent` | 32 |
-| `max_subintents_per_transaction` | 32 |
-| `max_blobs` | 64 |
-| `max_tip_basis_points` | 1,000,000 |
+| Parameter                          | Value     |
+| ---------------------------------- | --------- |
+| `max_signer_signatures_per_intent` | 16        |
+| `max_references_per_intent`        | 512       |
+| `max_instructions`                 | 1000      |
+| `max_epoch_range`                  | ~30 days  |
+| `max_subintent_depth`              | 3         |
+| `max_total_signature_validations`  | 64        |
+| `max_total_references`             | 512       |
+| `max_user_payload_length`          | 1 MB      |
+| `max_child_subintents_per_intent`  | 32        |
+| `max_subintents_per_transaction`   | 32        |
+| `max_blobs`                        | 64        |
+| `max_tip_basis_points`             | 1,000,000 |
 
 ### V1 Validation Steps
 
@@ -644,13 +645,13 @@ SubintentHash = hash(PREFIX || Subintent_disc || intent_core_hash)
 
 ### Hash Types (Distinct Newtypes)
 
-| Type | Purpose | Bech32m Prefix |
-|------|---------|----------------|
-| `TransactionIntentHash` | Primary transaction ID | `txid_` |
-| `SignedTransactionIntentHash` | Signed intent ID | `signedintent_` |
-| `NotarizedTransactionHash` | Notarized payload ID | (varies) |
-| `SubintentHash` | Subintent ID (committed only once) | `subtxid_` |
-| `IntentHash` | Enum: `Transaction(...)` / `Subintent(...)` | — |
+| Type                          | Purpose                                     | Bech32m Prefix  |
+| ----------------------------- | ------------------------------------------- | --------------- |
+| `TransactionIntentHash`       | Primary transaction ID                      | `txid_`         |
+| `SignedTransactionIntentHash` | Signed intent ID                            | `signedintent_` |
+| `NotarizedTransactionHash`    | Notarized payload ID                        | (varies)        |
+| `SubintentHash`               | Subintent ID (committed only once)          | `subtxid_`      |
+| `IntentHash`                  | Enum: `Transaction(...)` / `Subintent(...)` | —               |
 
 ### Signature Validation
 
@@ -679,12 +680,12 @@ Transactions use **Manifest SBOR** (Radix-specific SBOR variant).
 
 Each transaction type has a single-byte discriminator in `AnyTransaction`:
 
-| Discriminator | Type |
-|---------------|------|
-| 1 | `TransactionIntentV1` |
-| 3 | `NotarizedTransactionV1` |
-| 9 | `TransactionIntentV2` |
-| 12 | `NotarizedTransactionV2` |
+| Discriminator | Type                     |
+| ------------- | ------------------------ |
+| 1             | `TransactionIntentV1`    |
+| 3             | `NotarizedTransactionV1` |
+| 9             | `TransactionIntentV2`    |
+| 12            | `NotarizedTransactionV2` |
 
 Fields marked `#[sbor(flatten)]` are encoded inline as tuples.
 
@@ -697,6 +698,7 @@ Each payload type has a `Raw*` wrapper (e.g., `RawNotarizedTransaction`) — `Ve
 Per REP-82: **preparation = decoding + hash calculation**. Validation is separate.
 
 The `prepare` method:
+
 1. SBOR-encode to `Raw*` type
 2. `TransactionDecoder` checks payload size limits
 3. Recursively decode each field, computing hashes
@@ -767,14 +769,14 @@ pub enum TipSpecifier {
 
 ### Constraints
 
-| Constraint | Limit |
-|------------|-------|
-| Max subintent depth | 3 (+ root = 4 levels) |
-| Max subintents per transaction | 32 |
-| Parent per subintent | Exactly 1 |
-| Reachability | All subintents must be reachable from root |
-| Yield count matching | `YIELD_TO_CHILD` count in parent = `YIELD_TO_PARENT` count in child |
-| Child manifest ending | Must end with `YIELD_TO_PARENT` |
+| Constraint                     | Limit                                                               |
+| ------------------------------ | ------------------------------------------------------------------- |
+| Max subintent depth            | 3 (+ root = 4 levels)                                               |
+| Max subintents per transaction | 32                                                                  |
+| Parent per subintent           | Exactly 1                                                           |
+| Reachability                   | All subintents must be reachable from root                          |
+| Yield count matching           | `YIELD_TO_CHILD` count in parent = `YIELD_TO_PARENT` count in child |
+| Child manifest ending          | Must end with `YIELD_TO_PARENT`                                     |
 
 ## Blobs
 

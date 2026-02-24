@@ -5,6 +5,7 @@
 `@radix-effects/gateway` is a production-grade Effect wrapper around the Radix Gateway API (~2,150 LOC). It converts the SDK's Promise-based methods into typed Effects with tagged errors, automatic 429 retry, exhaustive pagination, chunked batching, and concurrency control.
 
 Key properties:
+
 - **One core service, many composites** — `GatewayApiClient` wraps the SDK; 17+ higher-level services compose on top
 - **Tagged error mapping** — SDK `ResponseError` → 12 discriminated `Data.TaggedError` classes
 - **Automatic rate-limit retry** — 429 detected via `fetchResponse.status`, sleeps `retryAfter` seconds, retries
@@ -98,9 +99,7 @@ class GatewayApiClient extends Effect.Service<GatewayApiClient>()(
 ### AtLedgerState (Zod)
 
 ```typescript
-type AtLedgerState =
-  | { state_version: number }
-  | { timestamp: Date }
+type AtLedgerState = { state_version: number } | { timestamp: Date };
 ```
 
 Validated by `AtLedgerStateSchema` (Zod union). Used in virtually every service to pin queries to a ledger point.
@@ -109,11 +108,11 @@ Validated by `AtLedgerStateSchema` (Zod union). Used in virtually every service 
 
 ```typescript
 type Validator = {
-  address: string
-  name: string
-  lsuResourceAddress: string
-  claimNftResourceAddress: string
-}
+  address: string;
+  name: string;
+  lsuResourceAddress: string;
+  claimNftResourceAddress: string;
+};
 ```
 
 Parsed from validator metadata in `state/getValidators.ts`.
@@ -133,25 +132,25 @@ RolaProof:    PersonaProof | AccountProof
 
 All use `Data.TaggedError` from Effect (except 3 legacy class-based errors):
 
-| # | Error | `_tag` | Source |
-|---|-------|--------|--------|
-| 1 | `AccountLockerNotFoundError` | `'AccountLockerNotFoundError'` | SDK type mapping |
-| 2 | `InternalServerError` | `'InternalServerError'` | SDK type mapping |
-| 3 | `InvalidRequestError` | `'InvalidRequestError'` | SDK type mapping |
-| 4 | `InvalidEntityError` | `'InvalidEntityError'` | SDK type mapping |
-| 5 | `EntityNotFoundError` | `'EntityNotFoundError'` | SDK type mapping |
-| 6 | `NotSyncedUpError` | `'NotSyncedUpError'` | SDK type mapping |
-| 7 | `TransactionNotFoundError` | `'TransactionNotFoundError'` | SDK type mapping |
-| 8 | `InvalidTransactionError` | `'InvalidTransactionError'` | SDK type mapping |
-| 9 | `ResponseError` | `'ResponseError'` | SDK fallback (has errorResponse but unknown type) |
-| 10 | `ErrorResponse` | `'ErrorResponse'` | SDK errorResponse present but no details.type match |
-| 11 | `RateLimitExceededError` | `'RateLimitExceededError'` | HTTP 429 detected via `fetchResponse.status` |
-| 12 | `UnknownGatewayError` | `'UnknownGatewayError'` | Catch-all for non-SDK errors |
-| 13 | `VerifyRolaProofError` | `'VerifyRolaProofError'` | ROLA verification failure |
-| 14 | `TransactionPreviewError` | `'TransactionPreviewError'` | Preview returns error receipt |
-| — | `InvalidStateInputError` | `'InvalidStateInputError'` | Zod validation of AtLedgerState (legacy class) |
-| — | `InvalidComponentStateError` | `'InvalidComponentStateError'` | sbor-ez-mode parse failure (legacy class) |
-| — | `InvalidInputError` | `'InvalidInputError'` | Service input validation (legacy class) |
+| #   | Error                        | `_tag`                         | Source                                              |
+| --- | ---------------------------- | ------------------------------ | --------------------------------------------------- |
+| 1   | `AccountLockerNotFoundError` | `'AccountLockerNotFoundError'` | SDK type mapping                                    |
+| 2   | `InternalServerError`        | `'InternalServerError'`        | SDK type mapping                                    |
+| 3   | `InvalidRequestError`        | `'InvalidRequestError'`        | SDK type mapping                                    |
+| 4   | `InvalidEntityError`         | `'InvalidEntityError'`         | SDK type mapping                                    |
+| 5   | `EntityNotFoundError`        | `'EntityNotFoundError'`        | SDK type mapping                                    |
+| 6   | `NotSyncedUpError`           | `'NotSyncedUpError'`           | SDK type mapping                                    |
+| 7   | `TransactionNotFoundError`   | `'TransactionNotFoundError'`   | SDK type mapping                                    |
+| 8   | `InvalidTransactionError`    | `'InvalidTransactionError'`    | SDK type mapping                                    |
+| 9   | `ResponseError`              | `'ResponseError'`              | SDK fallback (has errorResponse but unknown type)   |
+| 10  | `ErrorResponse`              | `'ErrorResponse'`              | SDK errorResponse present but no details.type match |
+| 11  | `RateLimitExceededError`     | `'RateLimitExceededError'`     | HTTP 429 detected via `fetchResponse.status`        |
+| 12  | `UnknownGatewayError`        | `'UnknownGatewayError'`        | Catch-all for non-SDK errors                        |
+| 13  | `VerifyRolaProofError`       | `'VerifyRolaProofError'`       | ROLA verification failure                           |
+| 14  | `TransactionPreviewError`    | `'TransactionPreviewError'`    | Preview returns error receipt                       |
+| —   | `InvalidStateInputError`     | `'InvalidStateInputError'`     | Zod validation of AtLedgerState (legacy class)      |
+| —   | `InvalidComponentStateError` | `'InvalidComponentStateError'` | sbor-ez-mode parse failure (legacy class)           |
+| —   | `InvalidInputError`          | `'InvalidInputError'`          | Service input validation (legacy class)             |
 
 Errors 1–8 carry the SDK error fields plus `{ code?: number; message?: string }`.
 
@@ -159,28 +158,28 @@ Errors 1–8 carry the SDK error fields plus `{ code?: number; message?: string 
 
 ## Service Catalog
 
-| Service | Input | Output | Dependencies | Config |
-|---------|-------|--------|--------------|--------|
-| `GetLedgerStateService` | `at_ledger_state` | `ledger_state` | GatewayApiClient | — |
-| `GetComponentStateService` | addresses, at_ledger_state, sbor-ez-mode schema | `[{address, state, details}]` | GetEntityDetailsVaultAggregated | — |
-| `GetFungibleBalance` | addresses, at_ledger_state | `[{address, items: [{amount: BigNumber, ...}]}]` | EntityFungiblesPage, StateEntityDetails | `GET_FUNGIBLE_BALANCE_CONCURRENCY` (5) |
-| `GetNonFungibleBalance` | addresses, at_ledger_state, resourceAddresses? | `{items: [{address, nonFungibleResources}]}` | NonFungibleData, GetNftResourceManagers | `GET_NON_FUNGIBLE_DATA_CONCURRENCY` (15) |
-| `GetNftResourceManagersService` | addresses, at_ledger_state, resourceAddresses? | `[{address, items: [{resourceAddress, nftIds}]}]` | EntityNonFungiblesPage, EntityNonFungibleIdsPage | 4 config keys (see Config table) |
-| `GetKeyValueStore` | address, at_ledger_state | `{key_value_store_address, entries}` | KeyValueStoreKeys, KeyValueStoreData | — |
-| `KeyValueStoreKeysService` | KVS request + at_ledger_state | paginated keys | GatewayApiClient | `MaxPageSize` (100) |
-| `KeyValueStoreDataService` | KVS data request + at_ledger_state | chunked data array | GatewayApiClient | `MaxPageSize` (100) |
-| `GetResourceHoldersService` | resourceAddress, cursor? | deduplicated holders array | GatewayApiClient | — |
-| `GetAddressByNonFungibleService` | resourceAddress, nonFungibleId, at_ledger_state | `{address, resourceAddress, nonFungibleId}` | GetNonFungibleLocation | — |
-| `GetNonFungibleLocationService` | resourceAddress, nonFungibleIds, at_ledger_state | flat locations array | GatewayApiClient | `MaxPageSize` (100) |
-| `GetValidators` | — | `Validator[]` | GatewayApiClient | — |
-| `PreviewTransaction` | TransactionPreviewRequest payload | preview result | GatewayApiClient | — |
-| `Rola` | `RolaProof` | void (or `VerifyRolaProofError`) | GatewayApiClient | `DAPP_DEFINITION_ADDRESS`, `ROLA_EXPECTED_ORIGIN`, `APPLICATION_NAME` |
-| `EntityFungiblesPage` | entity fungibles request + at_ledger_state | all items (exhaustive) | GatewayApiClient | `MaxPageSize` (100) |
-| `EntityNonFungiblesPage` | entity non-fungibles request + at_ledger_state | single page result | GatewayApiClient | `MaxPageSize` (100) |
-| `EntityNonFungibleIdsPage` | vault, resource, address, at_ledger_state | `{ids, address}` (exhaustive) | GatewayApiClient | `StateEntityDetailsPageSize` (100) |
-| `GetEntityDetailsVaultAggregated` | addresses, options, at_ledger_state | flat entity details array | GatewayApiClient | `StateEntityDetailsPageSize` (20) |
-| `StateEntityDetails` | addresses + options | `{ledger_state, items}` | GatewayApiClient | `StateEntityDetailsPageSize` (20), `STATE_ENTITY_DETAILS_CONCURRENCY` (5) |
-| `NonFungibleData` | NFT data request + at_ledger_state | flat NFT data array | GatewayApiClient | `MaxPageSize` (100) |
+| Service                           | Input                                            | Output                                            | Dependencies                                     | Config                                                                    |
+| --------------------------------- | ------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `GetLedgerStateService`           | `at_ledger_state`                                | `ledger_state`                                    | GatewayApiClient                                 | —                                                                         |
+| `GetComponentStateService`        | addresses, at_ledger_state, sbor-ez-mode schema  | `[{address, state, details}]`                     | GetEntityDetailsVaultAggregated                  | —                                                                         |
+| `GetFungibleBalance`              | addresses, at_ledger_state                       | `[{address, items: [{amount: BigNumber, ...}]}]`  | EntityFungiblesPage, StateEntityDetails          | `GET_FUNGIBLE_BALANCE_CONCURRENCY` (5)                                    |
+| `GetNonFungibleBalance`           | addresses, at_ledger_state, resourceAddresses?   | `{items: [{address, nonFungibleResources}]}`      | NonFungibleData, GetNftResourceManagers          | `GET_NON_FUNGIBLE_DATA_CONCURRENCY` (15)                                  |
+| `GetNftResourceManagersService`   | addresses, at_ledger_state, resourceAddresses?   | `[{address, items: [{resourceAddress, nftIds}]}]` | EntityNonFungiblesPage, EntityNonFungibleIdsPage | 4 config keys (see Config table)                                          |
+| `GetKeyValueStore`                | address, at_ledger_state                         | `{key_value_store_address, entries}`              | KeyValueStoreKeys, KeyValueStoreData             | —                                                                         |
+| `KeyValueStoreKeysService`        | KVS request + at_ledger_state                    | paginated keys                                    | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
+| `KeyValueStoreDataService`        | KVS data request + at_ledger_state               | chunked data array                                | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
+| `GetResourceHoldersService`       | resourceAddress, cursor?                         | deduplicated holders array                        | GatewayApiClient                                 | —                                                                         |
+| `GetAddressByNonFungibleService`  | resourceAddress, nonFungibleId, at_ledger_state  | `{address, resourceAddress, nonFungibleId}`       | GetNonFungibleLocation                           | —                                                                         |
+| `GetNonFungibleLocationService`   | resourceAddress, nonFungibleIds, at_ledger_state | flat locations array                              | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
+| `GetValidators`                   | —                                                | `Validator[]`                                     | GatewayApiClient                                 | —                                                                         |
+| `PreviewTransaction`              | TransactionPreviewRequest payload                | preview result                                    | GatewayApiClient                                 | —                                                                         |
+| `Rola`                            | `RolaProof`                                      | void (or `VerifyRolaProofError`)                  | GatewayApiClient                                 | `DAPP_DEFINITION_ADDRESS`, `ROLA_EXPECTED_ORIGIN`, `APPLICATION_NAME`     |
+| `EntityFungiblesPage`             | entity fungibles request + at_ledger_state       | all items (exhaustive)                            | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
+| `EntityNonFungiblesPage`          | entity non-fungibles request + at_ledger_state   | single page result                                | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
+| `EntityNonFungibleIdsPage`        | vault, resource, address, at_ledger_state        | `{ids, address}` (exhaustive)                     | GatewayApiClient                                 | `StateEntityDetailsPageSize` (100)                                        |
+| `GetEntityDetailsVaultAggregated` | addresses, options, at_ledger_state              | flat entity details array                         | GatewayApiClient                                 | `StateEntityDetailsPageSize` (20)                                         |
+| `StateEntityDetails`              | addresses + options                              | `{ledger_state, items}`                           | GatewayApiClient                                 | `StateEntityDetailsPageSize` (20), `STATE_ENTITY_DETAILS_CONCURRENCY` (5) |
+| `NonFungibleData`                 | NFT data request + at_ledger_state               | flat NFT data array                               | GatewayApiClient                                 | `MaxPageSize` (100)                                                       |
 
 ---
 
@@ -191,15 +190,15 @@ Errors 1–8 carry the SDK error fields plus `{ code?: number; message?: string 
 Used by: `EntityFungiblesPage`, `EntityNonFungibleIdsPage`, `GetKeyValueStore`, `GetResourceHoldersService`
 
 ```typescript
-const items = [...initialResult.items]
-let nextCursor = initialResult.next_cursor
+const items = [...initialResult.items];
+let nextCursor = initialResult.next_cursor;
 
 while (nextCursor) {
-  const result = yield* service({ ...input, cursor: nextCursor })
-  items.push(...result.items)
-  nextCursor = result.next_cursor
+  const result = yield * service({ ...input, cursor: nextCursor });
+  items.push(...result.items);
+  nextCursor = result.next_cursor;
 }
-return items
+return items;
 ```
 
 Drains all pages until `next_cursor` is `undefined`.
@@ -209,13 +208,10 @@ Drains all pages until `next_cursor` is `undefined`.
 Used by: `GetEntityDetailsVaultAggregated`, `StateEntityDetails`, `KeyValueStoreDataService`, `NonFungibleData`
 
 ```typescript
-const chunks = chunker(addresses, pageSize)  // split into N-sized arrays
-const results = yield* Effect.forEach(
-  chunks,
-  (chunk) => service(chunk),
-  { concurrency: N }
-)
-return results.flat()
+const chunks = chunker(addresses, pageSize); // split into N-sized arrays
+const results =
+  yield * Effect.forEach(chunks, (chunk) => service(chunk), { concurrency: N });
+return results.flat();
 ```
 
 ### Chunker Utility
@@ -224,11 +220,11 @@ return results.flat()
 // helpers/chunker.ts — 10 LOC
 const chunker = <T>(array: T[], size: number): T[][] =>
   array.reduce((acc, item, index) => {
-    const chunkIndex = Math.floor(index / size)
-    if (!acc[chunkIndex]) acc[chunkIndex] = []
-    acc[chunkIndex].push(item)
-    return acc
-  }, [] as T[][])
+    const chunkIndex = Math.floor(index / size);
+    if (!acc[chunkIndex]) acc[chunkIndex] = [];
+    acc[chunkIndex].push(item);
+    return acc;
+  }, [] as T[][]);
 ```
 
 ### Concurrency Control
@@ -263,13 +259,13 @@ SDK Promise rejects
 Built into `wrapMethod` — every wrapped SDK call gets automatic 429 handling:
 
 ```typescript
-Effect.tapError((error) => {
-  if (error._tag === 'RateLimitExceededError') {
-    yield* Effect.logWarning(`Rate limit, retrying in ${error.retryAfter}s`)
-    yield* Effect.sleep(Duration.seconds(error.retryAfter))
+(Effect.tapError((error) => {
+  if (error._tag === "RateLimitExceededError") {
+    yield * Effect.logWarning(`Rate limit, retrying in ${error.retryAfter}s`);
+    yield * Effect.sleep(Duration.seconds(error.retryAfter));
   }
 }),
-Effect.retry({ while: (e) => e._tag === 'RateLimitExceededError' })
+  Effect.retry({ while: (e) => e._tag === "RateLimitExceededError" }));
 ```
 
 The `retryAfter` value is parsed from the `retry-after` HTTP header. The sleep happens inside `tapError` (before the retry), so the retry fires immediately after the sleep completes.
@@ -284,26 +280,44 @@ The `retryAfter` value is parsed from the `retry-after` HTTP header. The sleep h
 
 ```typescript
 const ScryptoSborValueKind = Schema.Literal(
-  'Bool', 'I8', 'I16', 'I32', 'I64', 'I128',
-  'U8', 'U16', 'U32', 'U64', 'U128',
-  'String', 'Enum', 'Array', 'Bytes', 'Map', 'Tuple',
-  'Reference', 'Own', 'Decimal', 'PreciseDecimal', 'NonFungibleLocalId'
-)
+  "Bool",
+  "I8",
+  "I16",
+  "I32",
+  "I64",
+  "I128",
+  "U8",
+  "U16",
+  "U32",
+  "U64",
+  "U128",
+  "String",
+  "Enum",
+  "Array",
+  "Bytes",
+  "Map",
+  "Tuple",
+  "Reference",
+  "Own",
+  "Decimal",
+  "PreciseDecimal",
+  "NonFungibleLocalId"
+);
 ```
 
 ### Primitive Types (Schema.Struct)
 
 All share a base with optional `type_name` and `field_name`:
 
-| Kind | Value Type | Notes |
-|------|-----------|-------|
-| `Bool` | `boolean` | |
-| `String` | `string` | |
-| `I8`..`I128`, `U8`..`U128` | `string` | Strings to preserve precision |
-| `Decimal`, `PreciseDecimal` | `string` | |
-| `Reference`, `Own` | `string` | Radix address |
-| `NonFungibleLocalId` | `string` | |
-| `Bytes` | `hex: string` | Also has `element_kind` |
+| Kind                        | Value Type    | Notes                         |
+| --------------------------- | ------------- | ----------------------------- |
+| `Bool`                      | `boolean`     |                               |
+| `String`                    | `string`      |                               |
+| `I8`..`I128`, `U8`..`U128`  | `string`      | Strings to preserve precision |
+| `Decimal`, `PreciseDecimal` | `string`      |                               |
+| `Reference`, `Own`          | `string`      | Radix address                 |
+| `NonFungibleLocalId`        | `string`      |                               |
+| `Bytes`                     | `hex: string` | Also has `element_kind`       |
 
 ### Recursive Types (Schema.suspend)
 
@@ -313,19 +327,19 @@ Four types reference `ScryptoSborValueSchema` recursively, requiring `Schema.sus
 // Array — elements contain any SBOR value
 const ScryptoSborValueArraySchema = Schema.suspend(() =>
   Schema.Struct({
-    kind: Schema.Literal('Array'),
+    kind: Schema.Literal("Array"),
     element_kind: ScryptoSborValueKind,
-    elements: Schema.Array(ScryptoSborValueSchema),  // recursive
+    elements: Schema.Array(ScryptoSborValueSchema), // recursive
   })
-)
+);
 
 // Map — key/value pairs are each any SBOR value
 const ScryptoSborValueMapEntrySchema = Schema.suspend(() =>
   Schema.Struct({
-    key: ScryptoSborValueSchema,    // recursive
-    value: ScryptoSborValueSchema,  // recursive
+    key: ScryptoSborValueSchema, // recursive
+    value: ScryptoSborValueSchema, // recursive
   })
-)
+);
 
 // Tuple — fields are any SBOR value
 // Enum — variant with fields that are any SBOR value
@@ -353,21 +367,21 @@ Order matters: primitives first for faster discriminant matching, recursive type
 
 All config is read via `Effect.Config` — never directly from `process.env`.
 
-| Config Key | Default | Used By |
-|------------|---------|---------|
-| `NETWORK_ID` | `1` (mainnet) | GatewayApiClient |
-| `GATEWAY_URL` | `undefined` (SDK default) | GatewayApiClient |
-| `APPLICATION_NAME` | `'@radix-effects/gateway'` | GatewayApiClient, Rola |
-| `GATEWAY_BASIC_AUTH` | `undefined` | GatewayApiClient (→ `Authorization: Basic {value}`) |
-| `GatewayApi__Endpoint__StateEntityDetailsPageSize` | `20` | StateEntityDetails, GetEntityDetailsVA, EntityNonFungibleIdsPage, GetNftResourceManagers |
-| `GatewayApi__Endpoint__MaxPageSize` | `100` | KVS Keys/Data, NonFungibleData, EntityFungiblesPage, EntityNonFungiblesPage, GetNonFungibleLocation |
-| `GATEWAY_STATE_ENTITY_DETAILS_CONCURRENCY` | `5` | StateEntityDetails, GetNftResourceManagers |
-| `GATEWAY_GET_FUNGIBLE_BALANCE_CONCURRENCY` | `5` | GetFungibleBalance |
-| `GATEWAY_GET_NON_FUNGIBLE_DATA_CONCURRENCY` | `15` | GetNonFungibleBalance |
-| `GET_NFT_RESOURCE_MANAGERS_CONCURRENCY` | `10` | GetNftResourceManagers |
-| `GET_NFT_IDS_CONCURRENCY` | `20` | GetNftResourceManagers |
-| `DAPP_DEFINITION_ADDRESS` | *(required)* | Rola |
-| `ROLA_EXPECTED_ORIGIN` | *(required)* | Rola |
+| Config Key                                         | Default                    | Used By                                                                                             |
+| -------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `NETWORK_ID`                                       | `1` (mainnet)              | GatewayApiClient                                                                                    |
+| `GATEWAY_URL`                                      | `undefined` (SDK default)  | GatewayApiClient                                                                                    |
+| `APPLICATION_NAME`                                 | `'@radix-effects/gateway'` | GatewayApiClient, Rola                                                                              |
+| `GATEWAY_BASIC_AUTH`                               | `undefined`                | GatewayApiClient (→ `Authorization: Basic {value}`)                                                 |
+| `GatewayApi__Endpoint__StateEntityDetailsPageSize` | `20`                       | StateEntityDetails, GetEntityDetailsVA, EntityNonFungibleIdsPage, GetNftResourceManagers            |
+| `GatewayApi__Endpoint__MaxPageSize`                | `100`                      | KVS Keys/Data, NonFungibleData, EntityFungiblesPage, EntityNonFungiblesPage, GetNonFungibleLocation |
+| `GATEWAY_STATE_ENTITY_DETAILS_CONCURRENCY`         | `5`                        | StateEntityDetails, GetNftResourceManagers                                                          |
+| `GATEWAY_GET_FUNGIBLE_BALANCE_CONCURRENCY`         | `5`                        | GetFungibleBalance                                                                                  |
+| `GATEWAY_GET_NON_FUNGIBLE_DATA_CONCURRENCY`        | `15`                       | GetNonFungibleBalance                                                                               |
+| `GET_NFT_RESOURCE_MANAGERS_CONCURRENCY`            | `10`                       | GetNftResourceManagers                                                                              |
+| `GET_NFT_IDS_CONCURRENCY`                          | `20`                       | GetNftResourceManagers                                                                              |
+| `DAPP_DEFINITION_ADDRESS`                          | _(required)_               | Rola                                                                                                |
+| `ROLA_EXPECTED_ORIGIN`                             | _(required)_               | Rola                                                                                                |
 
 ---
 
@@ -376,106 +390,100 @@ All config is read via `Effect.Config` — never directly from `process.env`.
 ### Providing GatewayApiClient.Default
 
 ```typescript
-import { GatewayApiClient } from '@radix-effects/gateway'
-import { ConfigProvider, Effect, Layer } from 'effect'
+import { GatewayApiClient } from "@radix-effects/gateway";
+import { ConfigProvider, Effect, Layer } from "effect";
 
 const program = Effect.gen(function* () {
-  const gateway = yield* GatewayApiClient
-  const status = yield* gateway.status.getCurrent()
-  console.log(status.ledger_state.state_version)
-})
+  const gateway = yield* GatewayApiClient;
+  const status = yield* gateway.status.getCurrent();
+  console.log(status.ledger_state.state_version);
+});
 
 program.pipe(
   Effect.provide(GatewayApiClient.Default),
   // Config keys read from ConfigProvider (env vars by default)
-  Effect.runPromise,
-)
+  Effect.runPromise
+);
 ```
 
 ### Querying Fungible Balance
 
 ```typescript
-import { GetFungibleBalance } from '@radix-effects/gateway'
+import { GetFungibleBalance } from "@radix-effects/gateway";
 
 const program = Effect.gen(function* () {
-  const svc = yield* GetFungibleBalance
+  const svc = yield* GetFungibleBalance;
   const balances = yield* svc({
-    addresses: ['account_rdx1...'],
+    addresses: ["account_rdx1..."],
     at_ledger_state: { state_version: 123456 },
-  })
+  });
   // balances[0].items[0].amount → BigNumber
-})
+});
 
-program.pipe(
-  Effect.provide(GetFungibleBalance.Default),
-  Effect.runPromise,
-)
+program.pipe(Effect.provide(GetFungibleBalance.Default), Effect.runPromise);
 ```
 
 ### Reading Key-Value Store
 
 ```typescript
-import { GetKeyValueStore } from '@radix-effects/gateway'
+import { GetKeyValueStore } from "@radix-effects/gateway";
 
 const program = Effect.gen(function* () {
-  const svc = yield* GetKeyValueStore
+  const svc = yield* GetKeyValueStore;
   const kvs = yield* svc({
-    address: 'internal_keyvaluestore_rdx1...',
+    address: "internal_keyvaluestore_rdx1...",
     at_ledger_state: { state_version: 123456 },
-  })
+  });
   // kvs.entries → all key-value pairs (exhaustive pagination)
-})
+});
 
-program.pipe(
-  Effect.provide(GetKeyValueStore.Default),
-  Effect.runPromise,
-)
+program.pipe(Effect.provide(GetKeyValueStore.Default), Effect.runPromise);
 ```
 
 ### Component State with sbor-ez-mode Schema
 
 ```typescript
-import { GetComponentStateService } from '@radix-effects/gateway'
-import { Struct, String, U64 } from 'sbor-ez-mode'
+import { GetComponentStateService } from "@radix-effects/gateway";
+import { Struct, String, U64 } from "sbor-ez-mode";
 
-const MyComponentSchema = Struct({ name: String, count: U64 })
+const MyComponentSchema = Struct({ name: String, count: U64 });
 
 const program = Effect.gen(function* () {
-  const svc = yield* GetComponentStateService
+  const svc = yield* GetComponentStateService;
   const results = yield* svc.run({
-    addresses: ['component_rdx1...'],
+    addresses: ["component_rdx1..."],
     at_ledger_state: { state_version: 123456 },
     schema: MyComponentSchema,
-  })
+  });
   // results[0].state.name → string, results[0].state.count → string
-})
+});
 
 program.pipe(
   Effect.provide(GetComponentStateService.Default),
-  Effect.runPromise,
-)
+  Effect.runPromise
+);
 ```
 
 ### ROLA Verification
 
 ```typescript
-import { Rola } from '@radix-effects/gateway'
+import { Rola } from "@radix-effects/gateway";
 
 const program = Effect.gen(function* () {
-  const rola = yield* Rola
+  const rola = yield* Rola;
   yield* rola.verifySignedChallenge({
-    address: 'account_rdx1...',
-    type: 'account',
-    challenge: 'abc123',
-    proof: { publicKey: '...', signature: '...', curve: 'curve25519' },
-  })
-})
+    address: "account_rdx1...",
+    type: "account",
+    challenge: "abc123",
+    proof: { publicKey: "...", signature: "...", curve: "curve25519" },
+  });
+});
 
 program.pipe(
   Effect.provide(Rola.Default),
   // Must provide: DAPP_DEFINITION_ADDRESS, ROLA_EXPECTED_ORIGIN
-  Effect.runPromise,
-)
+  Effect.runPromise
+);
 ```
 
 ---
@@ -492,10 +500,14 @@ Services read config through `Config.string(...)` / `Config.number(...)`. You mu
 
 ```typescript
 Effect.provide(
-  Layer.setConfigProvider(ConfigProvider.fromMap(new Map([
-    ['NETWORK_ID', '2'],  // stokenet
-  ])))
-)
+  Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["NETWORK_ID", "2"], // stokenet
+      ])
+    )
+  )
+);
 ```
 
 ### 3. Chunker Page-Size Limits
@@ -507,14 +519,14 @@ The `chunker` splits arrays into fixed-size chunks matching the Gateway API's ma
 Higher-level services declare `dependencies:` but this only wires one level. `GatewayApiClient.Default` must still be in scope. For composite services, the simplest approach:
 
 ```typescript
-Effect.provide(GetFungibleBalance.Default)
+Effect.provide(GetFungibleBalance.Default);
 // GetFungibleBalance.Default auto-includes its declared dependencies,
 // which transitively include GatewayApiClient.Default
 ```
 
 ### 5. RateLimitExceededError Sleep Is Inside tapError
 
-The sleep happens *before* the retry fires. The `tapError` runs the sleep as a side-effect on error, then `Effect.retry` re-executes the whole `tryPromise`. This means the retry is unbounded — it will keep retrying as long as it gets 429s.
+The sleep happens _before_ the retry fires. The `tapError` runs the sleep as a side-effect on error, then `Effect.retry` re-executes the whole `tryPromise`. This means the retry is unbounded — it will keep retrying as long as it gets 429s.
 
 ### 6. Legacy Error Classes vs TaggedError
 

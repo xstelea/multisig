@@ -1,11 +1,16 @@
 {
   "private": true,
+  "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "lint": "oxlint"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "prettier": "^3.8.1"
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0"
   }
 }

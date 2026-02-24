@@ -5,9 +5,15 @@ edition = "2021"
 
 [dependencies]
 # Radix crates from local workspace
-radix-transactions = { path = "../.repos/radixdlt-scrypto/radix-transactions", default-features = false, features = ["std"] }
-radix-common = { path = "../.repos/radixdlt-scrypto/radix-common", default-features = false, features = ["std"] }
-radix-engine-interface = { path = "../.repos/radixdlt-scrypto/radix-engine-interface", default-features = false, features = ["std"] }
+radix-transactions = { path = "../.repos/radixdlt-scrypto/radix-transactions", default-features = false, features = [
+  "std",
+] }
+radix-common = { path = "../.repos/radixdlt-scrypto/radix-common", default-features = false, features = [
+  "std",
+] }
+radix-engine-interface = { path = "../.repos/radixdlt-scrypto/radix-engine-interface", default-features = false, features = [
+  "std",
+] }
 
 # HTTP client for Gateway API
 reqwest = { version = "0.11", features = ["json", "blocking"] }

@@ -5,6 +5,7 @@
 `@radixdlt/radix-dapp-toolkit` (RDT) is the official TypeScript SDK for integrating Radix Wallet into web dApps. It handles wallet connection, account/persona sharing, transaction signing, pre-authorization (subintents), and all transport-layer communication.
 
 Key properties:
+
 - **Factory pattern** — `RadixDappToolkit(options)` wires modules, returns `walletApi`, `buttonApi`, `gatewayApi`
 - **Dual transport** — Connector Extension (desktop, CustomEvent) + Radix Connect Relay (mobile, deep link + REST polling)
 - **Reactive state** — RxJS Observables for wallet data, button status, request items
@@ -78,20 +79,20 @@ const rdt = RadixDappToolkit(options: RadixDappToolkitOptions)
 
 ### RadixDappToolkitOptions
 
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `networkId` | `number` | Yes | `RadixNetwork.Stokenet` (2), `.Mainnet` (1) |
-| `dAppDefinitionAddress` | `string` | Yes | On-ledger dApp definition account |
-| `applicationName` | `string` | No | Identifies dApp in wallet |
-| `applicationVersion` | `string` | No | |
-| `useCache` | `boolean` | No | Default true; skip wallet UI for repeat requests |
-| `gatewayBaseUrl` | `string` | No | Override gateway URL |
-| `logger` | `Logger` | No | Custom logger |
-| `onDisconnect` | `() => void` | No | Disconnect callback |
-| `explorer` | `ExplorerConfig` | No | `{ baseUrl, transactionPath, subintentPath, accountsPath }` |
-| `requestInterceptor` | `(WalletInteraction) => Promise<WalletInteraction>` | No | Modify outgoing requests |
-| `providers` | `Partial<Providers>` | No | DI overrides for all modules |
-| `featureFlags` | `string[]` | No | Experimental features |
+| Field                   | Type                                                | Required | Notes                                                       |
+| ----------------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| `networkId`             | `number`                                            | Yes      | `RadixNetwork.Stokenet` (2), `.Mainnet` (1)                 |
+| `dAppDefinitionAddress` | `string`                                            | Yes      | On-ledger dApp definition account                           |
+| `applicationName`       | `string`                                            | No       | Identifies dApp in wallet                                   |
+| `applicationVersion`    | `string`                                            | No       |                                                             |
+| `useCache`              | `boolean`                                           | No       | Default true; skip wallet UI for repeat requests            |
+| `gatewayBaseUrl`        | `string`                                            | No       | Override gateway URL                                        |
+| `logger`                | `Logger`                                            | No       | Custom logger                                               |
+| `onDisconnect`          | `() => void`                                        | No       | Disconnect callback                                         |
+| `explorer`              | `ExplorerConfig`                                    | No       | `{ baseUrl, transactionPath, subintentPath, accountsPath }` |
+| `requestInterceptor`    | `(WalletInteraction) => Promise<WalletInteraction>` | No       | Modify outgoing requests                                    |
+| `providers`             | `Partial<Providers>`                                | No       | DI overrides for all modules                                |
+| `featureFlags`          | `string[]`                                          | No       | Experimental features                                       |
 
 ---
 
@@ -177,6 +178,7 @@ walletApi.provideConnectResponseCallback((result) => { /* handle login */ })
 ## Key Types
 
 ### WalletDataState
+
 ```typescript
 {
   accounts: { address: string, label: string, appearanceId: number }[]
@@ -191,6 +193,7 @@ walletApi.provideConnectResponseCallback((result) => { /* handle login */ })
 ```
 
 ### SignedChallenge / Proof
+
 ```typescript
 SignedChallenge = {
   type: 'persona' | 'account'
@@ -201,6 +204,7 @@ SignedChallenge = {
 ```
 
 ### SdkError
+
 ```typescript
 {
   error: string           // ErrorType discriminator
@@ -211,6 +215,7 @@ SignedChallenge = {
 ```
 
 ### ErrorType (all values)
+
 `rejectedByUser`, `missingExtension`, `canceledByUser`, `walletRequestValidation`, `walletResponseValidation`, `wrongNetwork`, `failedToPrepareTransaction`, `failedToCompileTransaction`, `failedToSignTransaction`, `failedToSubmitTransaction`, `failedToPollSubmittedTransaction`, `submittedTransactionWasDuplicate`, `submittedTransactionHasFailedTransactionStatus`, `submittedTransactionHasRejectedTransactionStatus`, `failedToFindAccountWithEnoughFundsToLockFee`, `wrongAccountType`, `unknownWebsite`, `radixJsonNotFound`, `unknownDappDefinitionAddress`, `invalidPersona`
 
 ---
@@ -235,6 +240,7 @@ WalletInteraction = {
 ```
 
 ### Response Schema
+
 ```typescript
 // Success
 { discriminator: 'success', interactionId, items: WalletInteractionResponseItems }
@@ -248,6 +254,7 @@ WalletInteraction = {
 ## Transport Layer
 
 ### Connector Extension (Desktop)
+
 - Sends via `window.dispatchEvent(new CustomEvent('radix#chromeExtension#send', { detail }))`
 - Receives via `addEventListener('radix#chromeExtension#receive', handler)`
 - Status check: `extensionStatus` interaction → `{ isWalletLinked, isExtensionAvailable, canHandleSessions }`
@@ -255,6 +262,7 @@ WalletInteraction = {
 - Session wrapping optional (if extension `canHandleSessions`)
 
 ### Radix Connect Relay (Mobile)
+
 - Deep link: `radixWallet://connect?sessionId=...&request=...&signature=...&publicKey=...&identity=...&origin=...&dAppDefinitionAddress=...`
 - Request base64url-encoded, signed with ed25519
 - Response polling: `GET radix-connect-relay.radixdlt.com/api/v1/sessions/{sessionId}` every 1.5s
@@ -312,11 +320,15 @@ Events: `onConnect`, `onDisconnect`, `onCancelRequestItem`, `onIgnoreTransaction
 
 ```typescript
 RadixNetwork = {
-  Mainnet: 0x01,    Stokenet: 0x02,
-  Gilganet: 0x20,   Enkinet: 0x21,
-  Hammunet: 0x22,   Nergalnet: 0x23,
-  Mardunet: 0x24,   Dumunet: 0x25
-}
+  Mainnet: 0x01,
+  Stokenet: 0x02,
+  Gilganet: 0x20,
+  Enkinet: 0x21,
+  Hammunet: 0x22,
+  Nergalnet: 0x23,
+  Mardunet: 0x24,
+  Dumunet: 0x25,
+};
 ```
 
 ---
@@ -324,6 +336,7 @@ RadixNetwork = {
 ## Storage
 
 localStorage partitioned as `rdt:{dAppDefinitionAddress}:{networkId}/`:
+
 - `state/` — walletData, personas, proofs
 - `requests/` — pending request metadata
 - `connectorExtension/` — sessionId
@@ -333,12 +346,12 @@ localStorage partitioned as `rdt:{dAppDefinitionAddress}:{networkId}/`:
 
 ## Design Patterns
 
-| Pattern | Usage |
-|---------|-------|
-| Factory + DI | `RadixDappToolkit(options)` with `providers` overrides |
-| Reactive streams | RxJS `Observable`, `BehaviorSubject`, `Subject` |
-| Result monad | `neverthrow` `ResultAsync<T, E>` — `.map()`, `.andThen()`, `.mapErr()` |
-| Schema validation | `valibot` schemas for all wallet protocol messages |
-| Immutable state | `immer` for state updates |
-| Builder pattern | `DataRequestBuilder`, `SubintentRequestBuilder` |
-| Transport abstraction | `TransportProvider` interface with `isSupported()`, `send()` |
+| Pattern               | Usage                                                                  |
+| --------------------- | ---------------------------------------------------------------------- |
+| Factory + DI          | `RadixDappToolkit(options)` with `providers` overrides                 |
+| Reactive streams      | RxJS `Observable`, `BehaviorSubject`, `Subject`                        |
+| Result monad          | `neverthrow` `ResultAsync<T, E>` — `.map()`, `.andThen()`, `.mapErr()` |
+| Schema validation     | `valibot` schemas for all wallet protocol messages                     |
+| Immutable state       | `immer` for state updates                                              |
+| Builder pattern       | `DataRequestBuilder`, `SubintentRequestBuilder`                        |
+| Transport abstraction | `TransportProvider` interface with `isSupported()`, `send()`           |

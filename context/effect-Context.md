@@ -14,7 +14,7 @@ The `Context` module in Effect is the foundation for **dependency injection** an
 ## The Effect Type Signature
 
 ```typescript
-Effect<Success, Error, Requirements>
+Effect<Success, Error, Requirements>;
 //      ^        ^       ^
 //      |        |       └── Contextual dependencies (services needed)
 //      |        └────────── Error type (can fail with)
@@ -30,16 +30,17 @@ The `Requirements` parameter (`R`) tracks which services an Effect needs. When `
 ### Context.Tag - Defining Services
 
 `Context.Tag` creates a unique identifier for a service. It's a type-level marker that connects:
+
 - A **service identifier** (the tag itself)
 - A **service interface** (what the service provides)
 
 ```typescript
-import { Context, Effect } from "effect"
+import { Context, Effect } from "effect";
 
 // Define a service tag
 class Random extends Context.Tag("MyRandomService")<
-  Random,                                    // Tag identifier type
-  { readonly next: Effect.Effect<number> }   // Service interface
+  Random, // Tag identifier type
+  { readonly next: Effect.Effect<number> } // Service interface
 >() {}
 ```
 
@@ -51,10 +52,10 @@ Once defined, yield the tag in `Effect.gen` to access the service:
 
 ```typescript
 const program = Effect.gen(function* () {
-  const random = yield* Random           // Accesses the service
-  const value = yield* random.next       // Uses service methods
-  return value
-})
+  const random = yield* Random; // Accesses the service
+  const value = yield* random.next; // Uses service methods
+  return value;
+});
 // Type: Effect<number, never, Random>
 //                              ^^^^^
 //                              Requires Random service
@@ -66,8 +67,8 @@ Use `Effect.provideService` to supply an implementation:
 
 ```typescript
 const runnable = Effect.provideService(program, Random, {
-  next: Effect.sync(() => Math.random())
-})
+  next: Effect.sync(() => Math.random()),
+});
 // Type: Effect<number, never, never>
 //                              ^^^^^
 //                              No more requirements!
@@ -89,11 +90,12 @@ class Database extends Context.Tag("Database")<
 
 // Create layer manually
 const DatabaseLive = Layer.succeed(Database, {
-  query: (sql) => Effect.succeed([])
-})
+  query: (sql) => Effect.succeed([]),
+});
 ```
 
 **Use when**:
+
 - Simple services without complex initialization
 - Middleware patterns (providing services dynamically)
 - Maximum control over layer composition
@@ -110,29 +112,30 @@ class Logger extends Effect.Service<Logger>()("Logger", {
   // Service implementation (effectful)
   effect: Effect.gen(function* () {
     return {
-      info: (msg: string) => Effect.log(msg)
-    }
+      info: (msg: string) => Effect.log(msg),
+    };
   }),
 
   // Dependencies this service needs
-  dependencies: [OtherService.Default]
+  dependencies: [OtherService.Default],
 }) {}
 ```
 
 **Use when**:
+
 - Services with dependencies on other services
 - Services needing lifecycle management (scoped)
 - You want auto-generated `Default` layer and accessors
 
 ### Comparison Table
 
-| Feature | Context.Tag | Effect.Service |
-|---------|-------------|----------------|
-| Boilerplate | Minimal | Slightly more |
-| Auto Layer | No | Yes (`.Default`) |
-| Accessors | No | Optional |
-| Dependencies | Manual | Declarative |
-| Scoped lifecycle | Manual | Built-in (`scoped:`) |
+| Feature          | Context.Tag | Effect.Service       |
+| ---------------- | ----------- | -------------------- |
+| Boilerplate      | Minimal     | Slightly more        |
+| Auto Layer       | No          | Yes (`.Default`)     |
+| Accessors        | No          | Optional             |
+| Dependencies     | Manual      | Declarative          |
+| Scoped lifecycle | Manual      | Built-in (`scoped:`) |
 
 ---
 
@@ -143,16 +146,16 @@ class Logger extends Effect.Service<Logger>()("Logger", {
 ```typescript
 // 1. Sync constructor - simple, immediate value
 class Config extends Effect.Service<Config>()("Config", {
-  sync: () => ({ apiUrl: "https://api.example.com" })
+  sync: () => ({ apiUrl: "https://api.example.com" }),
 }) {}
 
 // 2. Effect constructor - async/effectful initialization
 class Database extends Effect.Service<Database>()("Database", {
   effect: Effect.gen(function* () {
-    const config = yield* Config
-    return { query: (sql: string) => Effect.succeed([]) }
+    const config = yield* Config;
+    return { query: (sql: string) => Effect.succeed([]) };
   }),
-  dependencies: [Config.Default]
+  dependencies: [Config.Default],
 }) {}
 
 // 3. Scoped constructor - lifecycle with cleanup
@@ -161,9 +164,9 @@ class Connection extends Effect.Service<Connection>()("Connection", {
     const conn = yield* Effect.acquireRelease(
       Effect.sync(() => createConnection()),
       (conn) => Effect.sync(() => conn.close())
-    )
-    return { conn }
-  })
+    );
+    return { conn };
+  }),
 }) {}
 ```
 
@@ -177,19 +180,27 @@ Layers are blueprints for building `Context` values. They compose services toget
 
 ```typescript
 // From simple value
-const ConfigLive = Layer.succeed(Config, { logLevel: "INFO" })
+const ConfigLive = Layer.succeed(Config, { logLevel: "INFO" });
 
 // From effectful computation
-const DatabaseLive = Layer.effect(Database, Effect.gen(function* () {
-  const config = yield* Config
-  return { query: () => Effect.succeed([]) }
-}))
+const DatabaseLive = Layer.effect(
+  Database,
+  Effect.gen(function* () {
+    const config = yield* Config;
+    return { query: () => Effect.succeed([]) };
+  })
+);
 
 // From scoped resource
-const ConnectionLive = Layer.scoped(Connection, Effect.gen(function* () {
-  yield* Effect.addFinalizer(() => Effect.log("Cleanup"))
-  return { /* ... */ }
-}))
+const ConnectionLive = Layer.scoped(
+  Connection,
+  Effect.gen(function* () {
+    yield* Effect.addFinalizer(() => Effect.log("Cleanup"));
+    return {
+      /* ... */
+    };
+  })
+);
 ```
 
 ### Composing Layers
@@ -197,20 +208,16 @@ const ConnectionLive = Layer.scoped(Connection, Effect.gen(function* () {
 ```typescript
 // Vertical: A provides to B
 const AppLayer = DatabaseLive.pipe(
-  Layer.provide(ConfigLive)  // Config feeds into Database
-)
+  Layer.provide(ConfigLive) // Config feeds into Database
+);
 
 // Horizontal: Merge independent layers
-const CombinedLayer = Layer.merge(LoggerLive, MetricsLive)
+const CombinedLayer = Layer.merge(LoggerLive, MetricsLive);
 
 // Full application layer
-const MainLayer = Layer.mergeAll(
-  DatabaseLive,
-  LoggerLive,
-  CacheLive
-).pipe(
-  Layer.provide(ConfigLive)  // Shared dependency
-)
+const MainLayer = Layer.mergeAll(DatabaseLive, LoggerLive, CacheLive).pipe(
+  Layer.provide(ConfigLive) // Shared dependency
+);
 ```
 
 ---
@@ -220,23 +227,24 @@ const MainLayer = Layer.mergeAll(
 Effect's type system ensures you can't run an effect without providing all dependencies:
 
 ```typescript
-const program: Effect<User, DbError, Database | Logger> =
-  Effect.gen(function* () {
-    const db = yield* Database
-    const logger = yield* Logger
+const program: Effect<User, DbError, Database | Logger> = Effect.gen(
+  function* () {
+    const db = yield* Database;
+    const logger = yield* Logger;
     // ...
-  })
+  }
+);
 
 // Providing Database removes it from requirements
-const partial = Effect.provide(program, DatabaseLive)
+const partial = Effect.provide(program, DatabaseLive);
 // Type: Effect<User, DbError, Logger>
 
 // Must provide Logger too
-const runnable = Effect.provide(partial, LoggerLive)
+const runnable = Effect.provide(partial, LoggerLive);
 // Type: Effect<User, DbError, never>
 
 // Now it can run!
-Effect.runPromise(runnable)
+Effect.runPromise(runnable);
 ```
 
 **Compiler enforces**: No missing dependencies at runtime.
@@ -247,14 +255,14 @@ Effect.runPromise(runnable)
 
 The `Context` module provides low-level operations (rarely used directly):
 
-| Function | Purpose |
-|----------|---------|
-| `Context.empty()` | Create empty context |
-| `Context.make(tag, value)` | Create context with single service |
-| `Context.add(context, tag, value)` | Add service to context |
-| `Context.get(context, tag)` | Get service (Option) |
-| `Context.unsafeGet(context, tag)` | Get service (throws if missing) |
-| `Context.merge(ctx1, ctx2)` | Combine two contexts |
+| Function                           | Purpose                            |
+| ---------------------------------- | ---------------------------------- |
+| `Context.empty()`                  | Create empty context               |
+| `Context.make(tag, value)`         | Create context with single service |
+| `Context.add(context, tag, value)` | Add service to context             |
+| `Context.get(context, tag)`        | Get service (Option)               |
+| `Context.unsafeGet(context, tag)`  | Get service (throws if missing)    |
+| `Context.merge(ctx1, ctx2)`        | Combine two contexts               |
 
 Most code uses `Layer` and `Effect.provide*` instead of raw Context operations.
 
@@ -265,14 +273,8 @@ Most code uses `Layer` and `Effect.provide*` instead of raw Context operations.
 ### Pattern: Service with Ref (Mutable State)
 
 ```typescript
-class Counter extends Context.Tag("Counter")<
-  Counter,
-  Ref.Ref<number>
->() {
-  static Live = Layer.scoped(
-    this,
-    Ref.make(0)
-  )
+class Counter extends Context.Tag("Counter")<Counter, Ref.Ref<number>>() {
+  static Live = Layer.scoped(this, Ref.make(0));
 }
 ```
 
@@ -283,14 +285,14 @@ class SendTransaction extends Effect.Service<SendTransaction>()(
   "SendTransaction",
   {
     effect: Effect.gen(function* () {
-      const rdt = yield* RadixDappToolkit
+      const rdt = yield* RadixDappToolkit;
 
       // Return a function, not a value
       return Effect.fn(function* (manifest: string) {
-        const toolkit = yield* Ref.get(rdt)
-        return yield* toolkit.send(manifest)
-      })
-    })
+        const toolkit = yield* Ref.get(rdt);
+        return yield* toolkit.send(manifest);
+      });
+    }),
   }
 ) {}
 ```
@@ -305,16 +307,16 @@ class RadixDappToolkit extends Context.Tag("RadixDappToolkit")<
   static Live = Layer.scoped(
     this,
     Effect.gen(function* () {
-      const rdt = RadixDappToolkitFactory({ /* config */ })
+      const rdt = RadixDappToolkitFactory({
+        /* config */
+      });
 
       // Register cleanup
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => rdt.destroy())
-      )
+      yield* Effect.addFinalizer(() => Effect.sync(() => rdt.destroy()));
 
-      return yield* Ref.make(rdt)
+      return yield* Ref.make(rdt);
     })
-  )
+  );
 }
 ```
 
@@ -327,49 +329,51 @@ class RadixDappToolkit extends Context.Tag("RadixDappToolkit")<
 ```typescript
 // Wrong - tag not yielded
 const program = Effect.gen(function* () {
-  const value = Database.query("SELECT 1")  // Oops!
-})
+  const value = Database.query("SELECT 1"); // Oops!
+});
 
 // Correct
 const program = Effect.gen(function* () {
-  const db = yield* Database
-  const value = yield* db.query("SELECT 1")
-})
+  const db = yield* Database;
+  const value = yield* db.query("SELECT 1");
+});
 ```
 
 ### 2. Providing layers in wrong order
 
 ```typescript
 // If B depends on A, provide A first (or use Layer.provide)
-const wrong = Layer.merge(BLive, ALive)  // B can't find A
-const correct = BLive.pipe(Layer.provide(ALive))
+const wrong = Layer.merge(BLive, ALive); // B can't find A
+const correct = BLive.pipe(Layer.provide(ALive));
 ```
 
 ### 3. Mixing async initialization with sync Layer
 
 ```typescript
 // Wrong - Layer.succeed can't handle async
-const DbLive = Layer.succeed(Database, await connectToDb())
+const DbLive = Layer.succeed(Database, await connectToDb());
 
 // Correct - use Layer.effect
-const DbLive = Layer.effect(Database,
+const DbLive = Layer.effect(
+  Database,
   Effect.promise(() => connectToDb())
-)
+);
 ```
 
 ---
 
 ## Summary
 
-| Concept | Purpose |
-|---------|---------|
-| `Context.Tag` | Define service identifier |
-| `Effect.Service` | Define service with built-in layer |
-| `Layer` | Blueprint for providing services |
-| `Effect.provide` | Supply dependencies to effect |
+| Concept            | Purpose                            |
+| ------------------ | ---------------------------------- |
+| `Context.Tag`      | Define service identifier          |
+| `Effect.Service`   | Define service with built-in layer |
+| `Layer`            | Blueprint for providing services   |
+| `Effect.provide`   | Supply dependencies to effect      |
 | `R` type parameter | Track dependencies at compile time |
 
 The Context system enables:
+
 - **Type-safe DI** - Compiler catches missing dependencies
 - **Testability** - Swap implementations easily
 - **Composability** - Build complex apps from simple services

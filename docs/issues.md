@@ -11,6 +11,7 @@ Parent PRD: `docs/multisig-orchestrator-prd.md`
 The tracer bullet. Stand up the full stack end-to-end and deliver the first visible feature: displaying the multisig account's current access rule (signers and threshold).
 
 **Backend (Rust/axum):**
+
 - New crate `multisig-server` with axum HTTP server
 - PostgreSQL connection pool (sqlx) + migration runner (empty initial migration)
 - CORS configuration for frontend origin
@@ -20,6 +21,7 @@ The tracer bullet. Stand up the full stack end-to-end and deliver the first visi
 - Configuration via environment variables: `MULTISIG_ACCOUNT_ADDRESS`, `GATEWAY_URL`, `DATABASE_URL`, `FRONTEND_ORIGIN`
 
 **Frontend (TanStack Start):**
+
 - New app with TanStack Start + React 19 + Tailwind CSS v4
 - Effect runtime setup (Atom context + global layer)
 - Radix dApp Toolkit initialization (connect button, network config)
@@ -55,9 +57,11 @@ None — can start immediately.
 Proposers can paste a raw transaction manifest, set an expiry, and create a proposal. All users can browse the proposal list and view proposal details including the full manifest text.
 
 **Database:**
+
 - `proposals` table migration: `id` (UUID), `manifest_text`, `treasury_account`, `epoch_min`, `epoch_max`, `status` (enum: Created, Signing, Ready, Submitting, Committed, Failed, Expired, Invalid), `subintent_hash`, `created_at`, `submitted_at`, `tx_id`
 
 **Backend:**
+
 - `ProposalStore` module — PostgreSQL-backed CRUD with state machine. Create stores manifest + computes epoch window from expiry config. Get/list with status filtering. State transition validation (only valid transitions allowed).
 - `TransactionBuilder` module — `build_unsigned_subintent(manifest_text, config)` that takes raw manifest text, wraps it with the correct epoch window and intent discriminator (cryptographically random), and returns the unsigned `PartialTransactionV2` + `SubintentHash`. Reuses POC's `subintent.rs` patterns.
 - API endpoints:
@@ -66,12 +70,14 @@ Proposers can paste a raw transaction manifest, set an expiry, and create a prop
   - `GET /proposals/:id` — full proposal detail including manifest text, epoch window, status, subintent hash
 
 **Frontend:**
+
 - Create Proposal page (`/proposals/new`) — textarea for manifest text, epoch/expiry input, submit button. On success, redirect to proposal detail.
 - Proposal List page (`/`) — table/cards showing all proposals with status badges, created date, epoch window. Link to detail.
 - Proposal Detail page (`/proposals/:id`) — full manifest text display (monospace/code block), status badge, epoch window, subintent hash, created date.
 - `OrchestratorClient` — add `createProposal()`, `listProposals()`, `getProposal(id)` methods.
 
 **Key decisions from PRD:**
+
 - Raw manifest input only (no builder UI)
 - Expiry encoded in sub-intent manifest (network-enforced)
 - `intent_discriminator` must use cryptographically random values (not `SystemTime::now()` like POC)
@@ -112,9 +118,11 @@ Proposers can paste a raw transaction manifest, set an expiry, and create a prop
 DAO signers can sign a proposal via their Radix Wallet. The backend validates each signature against the current access rule, stores it, tracks progress toward the threshold, and transitions the proposal to `Ready` when the threshold is met.
 
 **Database:**
+
 - `signatures` table migration: `id` (UUID), `proposal_id` (FK), `signer_public_key`, `signature_bytes`, `created_at`
 
 **Backend:**
+
 - `SignatureCollector` module:
   - `add_signature(proposal_id, signed_partial_transaction_hex)` — parses the signed partial transaction hex (returned by wallet's `sendPreAuthorizationRequest`), extracts the signature and signer public key, validates:
     1. Signer's badge is in the current access rule (calls GatewayClient)
@@ -126,6 +134,7 @@ DAO signers can sign a proposal via their Radix Wallet. The backend validates ea
 - API endpoint: `POST /proposals/:id/sign` — accepts `{ signed_partial_transaction_hex }`, returns updated signature status
 
 **Frontend:**
+
 - Proposal Detail page additions:
   - "Sign" button (visible when wallet connected and user is a valid signer who hasn't signed yet)
   - Sign flow: click → `walletApi.sendPreAuthorizationRequest(subintentManifest)` → receive signed partial hex → `POST /proposals/:id/sign`
@@ -135,6 +144,7 @@ DAO signers can sign a proposal via their Radix Wallet. The backend validates ea
 - `OrchestratorClient` — add `signProposal(id, signedHex)` method
 
 **Key decisions from PRD:**
+
 - Only accept signatures from accounts in the current access rule (prevents signature limit exhaustion — see architecture doc)
 - Backend parses `sendPreAuthorizationRequest` response hex to extract signature + public key
 - Wallet returns `SignedPartialTransactionV2` hex; backend must decode this
@@ -171,9 +181,11 @@ DAO signers can sign a proposal via their Radix Wallet. The backend validates ea
 When a proposal reaches `Ready` status, a fee payer can preview the composed transaction, sign it via their wallet, and submit it to the network. The system displays the final transaction status.
 
 **Database:**
+
 - `submission_attempts` table migration: `id` (UUID), `proposal_id` (FK), `fee_payer_account`, `tx_hash`, `status`, `created_at`
 
 **Backend:**
+
 - `TransactionBuilder` additions:
   - `compose_main_transaction(proposal_id, fee_payer_account)` — retrieves the proposal's signed subintent (with all collected signatures), builds the main transaction manifest (`lock_fee(fee_payer, amount)` + `yield_to_child("withdrawal", subintent)`), returns the unsigned main transaction for the fee payer to sign. Reuses POC's `transaction.rs` patterns.
 - `GatewayClient` additions:
@@ -187,6 +199,7 @@ When a proposal reaches `Ready` status, a fee payer can preview the composed tra
 - Store submission attempt with tx hash and status
 
 **Frontend:**
+
 - Proposal Detail page additions:
   - "Submit" button (visible when proposal is `Ready` and wallet is connected)
   - Submit flow:
@@ -199,6 +212,7 @@ When a proposal reaches `Ready` status, a fee payer can preview the composed tra
 - `OrchestratorClient` — add `prepareSubmission(id)`, `submitProposal(id, feePayerSignature)` methods
 
 **Key decisions from PRD:**
+
 - Fee payer = submitter (no service account)
 - Preview/validate before submission is mandatory (user story 10)
 - `notary_is_signatory=true` so notary signature authorizes `lock_fee` (POC pattern)
@@ -235,6 +249,7 @@ When a proposal reaches `Ready` status, a fee payer can preview the composed tra
 A background task periodically checks pending proposals and flags those that have become invalid due to access rule changes or epoch expiry. Users see warnings on affected proposals and can view expired/failed proposals in the history.
 
 **Backend:**
+
 - `ValidityMonitor` module — background task (tokio interval) that:
   1. Fetches all proposals in `Created`, `Signing`, or `Ready` status
   2. For each, checks:
@@ -248,6 +263,7 @@ A background task periodically checks pending proposals and flags those that hav
 - `GET /proposals` and `GET /proposals/:id` — include `invalid_reason` field when status is Invalid, include signature validity flags
 
 **Frontend:**
+
 - Proposal Detail page additions:
   - Warning banner when proposal is `Expired` or `Invalid` with reason (e.g. "Access rule changed — signer X removed", "Proposal expired at epoch N")
   - Invalidated signatures shown with strikethrough or warning icon
@@ -281,13 +297,13 @@ A background task periodically checks pending proposals and flags those that hav
 
 ## Summary
 
-| Issue | Title | Blocked by | Parallelizable with |
-|-------|-------|------------|---------------------|
-| 1 | Project scaffolding + access rule display | None | — |
-| 2 | Create & view proposals | Issue 1 | — |
-| 3 | Collect signatures | Issue 2 | — |
-| 4 | Submit transaction | Issue 3 | Issue 5 |
-| 5 | Validity monitoring | Issue 3 | Issue 4 |
+| Issue | Title                                     | Blocked by | Parallelizable with |
+| ----- | ----------------------------------------- | ---------- | ------------------- |
+| 1     | Project scaffolding + access rule display | None       | —                   |
+| 2     | Create & view proposals                   | Issue 1    | —                   |
+| 3     | Collect signatures                        | Issue 2    | —                   |
+| 4     | Submit transaction                        | Issue 3    | Issue 5             |
+| 5     | Validity monitoring                       | Issue 3    | Issue 4             |
 
 ```
 Issue 1 → Issue 2 → Issue 3 → Issue 4
@@ -295,6 +311,7 @@ Issue 1 → Issue 2 → Issue 3 → Issue 4
 ```
 
 All 15 user stories from the PRD are covered:
+
 - Issue 1: US 12
 - Issue 2: US 1, 2, 3, 9, 13
 - Issue 3: US 4, 5, 11

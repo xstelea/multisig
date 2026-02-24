@@ -30,6 +30,6 @@ echo ""
 (cd "$ROOT/multisig-server" && cargo run 2>&1 | sed 's/^/[server]  /') &
 
 # Frontend
-(cd "$ROOT/multisig-app" && npm run dev 2>&1 | sed 's/^/[app]     /') &
+(cd "$ROOT/multisig-app" && pnpm run dev 2>&1 | sed 's/^/[app]     /') &
 
 wait
