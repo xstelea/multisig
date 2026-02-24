@@ -1,6 +1,6 @@
 # Spec Index
 
-Quick navigation for the 15 spec files in `context/`.
+Quick navigation for the 19 spec files in `context/`.
 
 ## Effect (8 specs)
 
@@ -15,7 +15,7 @@ Quick navigation for the 15 spec files in `context/`.
 | [`effect-Schema.md`](context/effect-Schema.md)     | Runtime validation and transformation with full TypeScript type inference               | `Schema.Struct`, `Schema.Class`, `Schema.decode`, `Schema.encode`, `Schema.brand`, `Schema.transform`, `Schema.filter`                    |
 | [`effect-Platform.md`](context/effect-Platform.md) | Platform-independent abstractions: HTTP client/server, filesystem, terminal, workers    | `HttpClient`, `HttpServer`, `FetchHttpClient`, `HttpRouter`, `FileSystem`, `Terminal`, `Worker`                                           |
 
-## Radix (5 specs)
+## Radix (9 specs)
 
 | File                                                         | Description                                                                            | Key Types / APIs                                                                                                             |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -23,7 +23,11 @@ Quick navigation for the 15 spec files in `context/`.
 | [`radix-transactions.md`](context/radix-transactions.md)     | `radix-transactions` Rust crate: build, sign, validate, serialize transactions (V1+V2) | `TransactionV2Builder`, `PartialTransactionV2Builder`, `SubintentManifestV2`, `NotarizedTransactionV2`, `IntentSignaturesV2` |
 | [`radix-GatewayRustSdk.md`](context/radix-GatewayRustSdk.md) | `radix-client` Rust crate: typed async/blocking HTTP clients for Gateway + Core APIs   | `GatewayClientAsync`, `GatewayClientBlocking`, `TransactionApi`, `StateApi`, `StatusApi`                                     |
 | [`radix-Sbor.md`](context/radix-Sbor.md)                     | SBOR binary serialization format (wire format, derive macros, schema system)           | `ScryptoSbor`, `ManifestSbor`, `sbor_decode`, `sbor_encode`, `manifest_encode`, `ScryptoValue`                               |
-| [`radix-Gateway.md`](context/radix-Gateway.md)               | `@radix-effects/gateway`: Effect wrapper around Radix Gateway API with tagged errors   | `GatewayApiClient`, `GatewayApiClientLayer`, `TransactionService`, `StateService`, `GatewayError`                            |
+| [`radix-Gateway.md`](context/radix-Gateway.md)                               | `@radix-effects/gateway`: Effect wrapper around Radix Gateway API with tagged errors   | `GatewayApiClient`, `GatewayApiClientLayer`, `TransactionService`, `StateService`, `GatewayError`                            |
+| [`radix-radix-dapp-toolkit.md`](context/radix-radix-dapp-toolkit.md)         | Official TS SDK: wallet connection, tx signing, pre-auth, reactive state               | `RadixDappToolkit`, `WalletApi`, `walletApi.sendTransaction`, `sendPreAuthorizationRequest`, `RdtState`                      |
+| [`radix-AccessRule.md`](context/radix-AccessRule.md)                         | Access control: rule trees, role assignment, owner badges, SBOR encoding               | `AccessRule`, `CompositeRequirement`, `BasicRequirement`, `RoleAssignmentInit`, `OwnerRole`                                  |
+| [`radix-Account.md`](context/radix-Account.md)                               | Account native blueprint: 30 methods, deposit rules, vaults, multi-sig                 | `AccountSubstate`, `DefaultDepositRule`, `ResourcePreference`, `ACCOUNT_OWNER_BADGE`, `securify`                             |
+| [`radix-TransactionManifest.md`](context/radix-TransactionManifest.md)       | Manifest instructions (V1/V2), ManifestBuilder, compiler, static validation            | `TransactionManifestV1`, `TransactionManifestV2`, `SubintentManifestV2`, `ManifestBuilder`, `InstructionV1/V2`               |
 
 ## Frontend (1 spec)
 
@@ -67,21 +71,27 @@ Quick navigation for the 15 spec files in `context/`.
   ┌──────────────────────────────────────────┐
   │            consultation dApp              │
   │  (effect-atom + radix-Gateway + Router)   │
-  └──────────────────┬───────────────────────┘
-                     │
-                     ▼
-            ┌─────────────────┐
-            │ tanstack-Router  │
-            └─────────────────┘
-
-  ┌──────────────────┐   ┌──────────────┐   ┌───────────────────┐
-  │radix-SubIntents   │◄─►│radix-txns    │◄─►│  radix-Sbor        │
-  └──────────────────┘   └──────┬───────┘   └────────┬──────────┘
-                                │                     │
-                                ▼                     ▼
-                       ┌─────────────────┐   ┌──────────────────┐
-                       │radix-GatewayRust│   │  radix-Gateway    │
-                       └─────────────────┘   └──────────────────┘
+  └──────┬───────────────┬───────────────────┘
+         │               │
+         ▼               ▼
+  ┌─────────────────┐  ┌────────────────────┐
+  │ tanstack-Router  │  │radix-dapp-toolkit  │
+  └─────────────────┘  └────────┬───────────┘
+                                │
+                                ▼
+  ┌──────────────────┐   ┌──────────────────┐   ┌───────────────────┐
+  │radix-SubIntents   │◄─►│radix-TxManifest  │◄─►│  radix-Sbor        │
+  └────────┬─────────┘   └──────┬───────────┘   └────────┬──────────┘
+           │                     │                        │
+           ▼                     ▼                        ▼
+  ┌──────────────────┐   ┌──────────────┐        ┌──────────────────┐
+  │radix-txns         │   │radix-Account │◄──────►│ radix-AccessRule  │
+  └────────┬─────────┘   └──────────────┘        └──────────────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │radix-GatewayRust│
+  └─────────────────┘
 ```
 
 **Key relationships:**
@@ -105,6 +115,12 @@ Quick navigation for the 15 spec files in `context/`.
 | consultation → radix-Gateway          | Blockchain reads via Effect Gateway wrapper        |
 | consultation → tanstack-Router        | File-based routing with search param validation    |
 | tanstack-Router ↔ effect-Schema       | Search params validated via Effect Schema adapters |
+| radix-AccessRule ↔ radix-Account      | Account roles use AccessRule for method auth       |
+| radix-Account ↔ radix-TxManifest      | Account methods called from manifests              |
+| radix-TxManifest ↔ radix-transactions | Manifests are core of transaction model            |
+| radix-TxManifest ↔ radix-SubIntents   | SubintentManifestV2 for pre-auth                   |
+| radix-dapp-toolkit ↔ consultation     | dApp uses RDT for wallet integration               |
+| radix-dapp-toolkit ↔ radix-SubIntents | RDT sends pre-auth requests                        |
 
 ## Quick Lookup
 
@@ -127,4 +143,9 @@ Quick navigation for the 15 spec files in `context/`.
 | See the consultation dApp architecture | [`consultation.md`](context/consultation.md)                                                                    |
 | Build atoms with Effect DI             | [`effect-atom.md`](context/effect-atom.md) + [`consultation.md`](context/consultation.md)                       |
 | Build multi-party transactions         | [`radix-SubIntents.md`](context/radix-SubIntents.md) + [`radix-transactions.md`](context/radix-transactions.md) |
+| Connect wallet / send tx from browser  | [`radix-radix-dapp-toolkit.md`](context/radix-radix-dapp-toolkit.md)                                            |
+| Configure access rules / roles         | [`radix-AccessRule.md`](context/radix-AccessRule.md)                                                            |
+| Work with account deposits / vaults    | [`radix-Account.md`](context/radix-Account.md)                                                                  |
+| Write transaction manifest instructions| [`radix-TransactionManifest.md`](context/radix-TransactionManifest.md)                                          |
+| Build multisig account                 | [`radix-Account.md`](context/radix-Account.md) + [`radix-AccessRule.md`](context/radix-AccessRule.md)           |
 | Understand the full app stack          | [`consultation.md`](context/consultation.md) (integrates all layers)                                            |
