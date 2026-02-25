@@ -78,6 +78,26 @@ YIELD_TO_CHILD("withdrawal");
 
 A server-generated ephemeral Ed25519 key notarizes the transaction (`notary_is_signatory: false` — it controls nothing and exists only to satisfy the `TransactionV2` protocol requirement).
 
+## CLI Tools
+
+### Generate Fee Payer Key
+
+Generates an Ed25519 keypair for the server's fee payer account and optionally funds it via the Stokenet faucet.
+
+```bash
+cd generate-fee-payer-cli && cargo run
+```
+
+Outputs a ready-to-use `FEE_PAYER_PRIVATE_KEY_HEX=...` line for your `.env`.
+
+### Create Multisig Account
+
+Generates a transaction manifest for creating an n-of-m multisig account.
+
+```bash
+cd create-account-cli && cargo run
+```
+
 ## Manual Start
 
 ### 1. Database (PostgreSQL)
