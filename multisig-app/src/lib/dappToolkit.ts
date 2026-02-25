@@ -1,6 +1,7 @@
 import {
   RadixDappToolkit as RadixDappToolkitFactory,
   DataRequestBuilder,
+  Logger,
 } from "@radixdlt/radix-dapp-toolkit";
 import { Context, Effect, Layer, Ref } from "effect";
 import { envVars } from "./envVars";
@@ -21,6 +22,7 @@ export class RadixDappToolkit extends Context.Tag("RadixDappToolkit")<
       const rdt = RadixDappToolkitFactory({
         networkId: envVars.NETWORK_ID,
         dAppDefinitionAddress: envVars.DAPP_DEFINITION_ADDRESS,
+        logger: Logger(),
       });
 
       rdt.walletApi.setRequestData(DataRequestBuilder.accounts().atLeast(1));

@@ -29,7 +29,7 @@ echo ""
 # Backend
 (cd "$ROOT/multisig-server" && cargo run 2>&1 | sed 's/^/[server]  /') &
 
-# Frontend
-(cd "$ROOT/multisig-app" && pnpm run dev 2>&1 | sed 's/^/[app]     /') &
+# Frontend (override PORT so Nitro doesn't inherit the backend's PORT=3001)
+(cd "$ROOT/multisig-app" && PORT=3000 pnpm run dev 2>&1 | sed 's/^/[app]     /') &
 
 wait

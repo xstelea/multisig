@@ -1,8 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useAtomSet } from "@effect-atom/atom-react";
+import { Result, useAtomSet, useAtomValue } from "@effect-atom/atom-react";
 import { createProposalAtom } from "@/atom/proposalAtoms";
+import { epochDurationAtom } from "@/atom/gatewayAtoms";
+import { envVars, dashboardBaseUrl } from "@/lib/envVars";
+import { formatEpochDelta, hoursToEpochs } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/proposals/new")({
   component: NewProposalPage,
@@ -23,6 +27,43 @@ function NewProposalPage() {
         </h1>
         <p className="text-muted-foreground mt-1">
           Paste a raw transaction manifest and set an expiry epoch.
+        </p>
+        <p className="text-xs text-muted-foreground font-mono flex items-start gap-2 mt-2">
+          <span>
+            Multisig account:{" "}
+            <a
+              href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${envVars.MULTISIG_ACCOUNT_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-accent transition-colors break-all"
+            >
+              {envVars.MULTISIG_ACCOUNT_ADDRESS}
+            </a>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(envVars.MULTISIG_ACCOUNT_ADDRESS);
+              toast.success("Address copied");
+            }}
+            className="shrink-0 p-0.5 hover:text-accent transition-colors"
+            title="Copy address"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
         </p>
       </div>
 
@@ -45,9 +86,19 @@ function FormSkeleton() {
 function CreateProposalForm() {
   const navigate = useNavigate();
   const [manifestText, setManifestText] = useState("");
+  const [expiryMode, setExpiryMode] = useState<"hours" | "epoch">("hours");
+  const [expiryHours, setExpiryHours] = useState("");
   const [expiryEpoch, setExpiryEpoch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const epochDurationResult = useAtomValue(epochDurationAtom);
+  const epochDuration = Result.builder(epochDurationResult)
+    .onSuccess((v) => v)
+    .orElse(() => undefined);
+
+  const currentEpoch = epochDuration?.currentEpoch;
+  const secondsPerEpoch = epochDuration?.secondsPerEpoch;
 
   const createProposal = useAtomSet(createProposalAtom, { mode: "promise" });
 
@@ -60,10 +111,30 @@ function CreateProposalForm() {
       return;
     }
 
-    const epoch = parseInt(expiryEpoch, 10);
-    if (isNaN(epoch) || epoch <= 0) {
-      setError("Expiry epoch must be a positive number");
-      return;
+    let epoch: number;
+    if (expiryMode === "hours") {
+      const hours = parseFloat(expiryHours);
+      if (isNaN(hours) || hours <= 0) {
+        setError("Hours must be greater than 0");
+        return;
+      }
+      if (currentEpoch === undefined || secondsPerEpoch === undefined) {
+        setError("Epoch data not loaded yet");
+        return;
+      }
+      epoch = currentEpoch + hoursToEpochs(hours, secondsPerEpoch);
+    } else {
+      epoch = parseInt(expiryEpoch, 10);
+      if (isNaN(epoch) || epoch <= 0) {
+        setError("Expiry epoch must be a positive number");
+        return;
+      }
+      if (currentEpoch !== undefined && epoch <= currentEpoch) {
+        setError(
+          `Expiry epoch must be greater than the current epoch (${currentEpoch})`
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -101,21 +172,112 @@ function CreateProposalForm() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="expiry" className="text-sm font-medium">
-          Expiry Epoch
-        </label>
-        <input
-          id="expiry"
-          type="number"
-          value={expiryEpoch}
-          onChange={(e) => setExpiryEpoch(e.target.value)}
-          placeholder="e.g. 50000"
-          className="w-48 px-4 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-          disabled={submitting}
-        />
+        <label className="text-sm font-medium">Expiry</label>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => setExpiryMode("hours")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              expiryMode === "hours"
+                ? "bg-accent text-white"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Hours
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpiryMode("epoch")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              expiryMode === "epoch"
+                ? "bg-accent text-white"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Exact Epoch
+          </button>
+        </div>
+
+        {expiryMode === "hours" ? (
+          <>
+            <input
+              id="expiry-hours"
+              type="number"
+              value={expiryHours}
+              onChange={(e) => setExpiryHours(e.target.value)}
+              placeholder="e.g. 2, 24, 168"
+              className="w-48 px-4 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              disabled={submitting}
+              min="0"
+              step="any"
+            />
+            <p className="text-xs text-muted-foreground">
+              How many hours until this proposal expires.
+            </p>
+            {(() => {
+              const hours = parseFloat(expiryHours);
+              if (
+                isNaN(hours) ||
+                hours <= 0 ||
+                currentEpoch === undefined ||
+                secondsPerEpoch === undefined
+              )
+                return null;
+              const epochsNeeded = hoursToEpochs(hours, secondsPerEpoch);
+              const resolved = currentEpoch + epochsNeeded;
+              return (
+                <p className="text-xs text-muted-foreground">
+                  Expires at epoch ~{resolved} (
+                  {formatEpochDelta(epochsNeeded, secondsPerEpoch)} from now)
+                </p>
+              );
+            })()}
+          </>
+        ) : (
+          <>
+            <input
+              id="expiry-epoch"
+              type="number"
+              value={expiryEpoch}
+              onChange={(e) => setExpiryEpoch(e.target.value)}
+              placeholder={
+                currentEpoch !== undefined
+                  ? `e.g. ${currentEpoch + 100}`
+                  : "e.g. 50000"
+              }
+              className="w-48 px-4 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              disabled={submitting}
+            />
+            <p className="text-xs text-muted-foreground">
+              The epoch at which this proposal expires. Must be greater than the
+              current epoch.
+            </p>
+            {(() => {
+              const epoch = parseInt(expiryEpoch, 10);
+              if (
+                isNaN(epoch) ||
+                currentEpoch === undefined ||
+                secondsPerEpoch === undefined ||
+                epoch <= currentEpoch
+              )
+                return null;
+              return (
+                <p className="text-xs text-muted-foreground">
+                  {formatEpochDelta(epoch - currentEpoch, secondsPerEpoch)} from
+                  now
+                </p>
+              );
+            })()}
+          </>
+        )}
+
         <p className="text-xs text-muted-foreground">
-          The epoch at which this proposal expires. Must be greater than the
-          current epoch.
+          {currentEpoch !== undefined
+            ? `Current epoch: ${currentEpoch}`
+            : Result.builder(epochDurationResult)
+                .onInitial(() => "Loading current epoch...")
+                .onFailure(() => "Failed to fetch current epoch")
+                .orElse(() => "")}
         </p>
       </div>
 

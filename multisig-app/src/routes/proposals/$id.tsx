@@ -12,6 +12,8 @@ import {
   makeSubmitProposalAtom,
 } from "@/atom/proposalAtoms";
 import { walletDataAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
+import { epochDurationAtom } from "@/atom/gatewayAtoms";
+import { formatEpochDelta } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useMemo, useState, useCallback } from "react";
 import { SubintentRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
@@ -136,6 +138,29 @@ function ProposalContent({
   const canSign =
     proposal.status === "created" || proposal.status === "signing";
 
+  const epochResult = useAtomValue(epochDurationAtom);
+  const epochInfo = Result.builder(epochResult)
+    .onSuccess((v) => v)
+    .onInitial(() => null)
+    .onFailure(() => null)
+    .render();
+
+  const isTerminal =
+    proposal.status === "committed" ||
+    proposal.status === "failed" ||
+    proposal.status === "expired" ||
+    proposal.status === "invalid";
+
+  const epochWindowLabel = (() => {
+    const base = `${proposal.epoch_min} – ${proposal.epoch_max}`;
+    if (!epochInfo || isTerminal) return base;
+    const remaining = formatEpochDelta(
+      proposal.epoch_max - epochInfo.currentEpoch,
+      epochInfo.secondsPerEpoch
+    );
+    return `${base} (${remaining} remaining)`;
+  })();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -154,10 +179,7 @@ function ProposalContent({
       {/* Metadata grid */}
       <div className="grid grid-cols-2 gap-4">
         <MetadataField label="Created" value={created} />
-        <MetadataField
-          label="Epoch Window"
-          value={`${proposal.epoch_min} – ${proposal.epoch_max}`}
-        />
+        <MetadataField label="Epoch Window" value={epochWindowLabel} />
         {proposal.subintent_hash && (
           <MetadataField
             label="Subintent Hash"

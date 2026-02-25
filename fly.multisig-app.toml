@@ -1,0 +1,27 @@
+# fly.toml app configuration file generated for multisig-app on 2026-02-25T15:16:08+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'multisig-app'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'multisig-app/Dockerfile'
+
+  [build.args]
+    VITE_ORCHESTRATOR_URL = 'https://multisig-server.fly.dev'
+    VITE_PUBLIC_DAPP_DEFINITION_ADDRESS = 'account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp'
+    VITE_PUBLIC_MULTISIG_ACCOUNT_ADDRESS = 'account_tdx_2_1c9ezpc6a9uvx29f34sn7d8ns4pgqf4al5zxuk862ayw4h0zsea3epk'
+    VITE_PUBLIC_NETWORK_ID = '2'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

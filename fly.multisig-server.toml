@@ -1,0 +1,24 @@
+app = 'multisig-server'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'multisig-server/Dockerfile'
+
+[env]
+  PORT = '8080'
+  GATEWAY_URL = 'https://babylon-stokenet-gateway.radixdlt.com'
+  NETWORK_ID = '2'
+  MONITOR_INTERVAL_SECS = '30'
+  MULTISIG_ACCOUNT_ADDRESS = 'account_tdx_2_1c9ezpc6a9uvx29f34sn7d8ns4pgqf4al5zxuk862ayw4h0zsea3epk'
+  FRONTEND_ORIGIN = 'https://multisig-app.fly.dev'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

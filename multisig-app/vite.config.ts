@@ -6,6 +6,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 
 const config = defineConfig({
+  server: {
+    port: 3000,
+    strictPort: true,
+  },
   plugins: [
     nitro({
       handlers: [

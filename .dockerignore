@@ -1,0 +1,9 @@
+node_modules/
+target/
+.git
+.env
+.env.*
+.output/
+multisig-server/target/
+create-account-cli/target/
+generate-fee-payer-cli/target/

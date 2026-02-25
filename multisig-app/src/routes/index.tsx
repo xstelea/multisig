@@ -6,7 +6,9 @@ import {
   dappToolkitAtom,
 } from "@/atom/accessRuleAtom";
 import { proposalListAtom } from "@/atom/proposalAtoms";
-import { envVars } from "@/lib/envVars";
+import { epochDurationAtom } from "@/atom/gatewayAtoms";
+import { formatEpochDelta } from "@/lib/epochTime";
+import { envVars, dashboardBaseUrl } from "@/lib/envVars";
 import { ClientOnly } from "@/lib/ClientOnly";
 import type { Proposal, SignerInfo } from "@/atom/orchestratorClient";
 
@@ -100,6 +102,12 @@ function StatusBadge({ status }: { status: string }) {
 
 function ProposalList() {
   const proposalsResult = useAtomValue(proposalListAtom);
+  const epochResult = useAtomValue(epochDurationAtom);
+  const epochInfo = Result.builder(epochResult)
+    .onSuccess((v) => v)
+    .onInitial(() => null)
+    .onFailure(() => null)
+    .render();
 
   return (
     <section className="border border-border rounded-lg p-6 bg-card">
@@ -130,7 +138,11 @@ function ProposalList() {
           return (
             <div className="divide-y divide-border">
               {proposals.map((proposal) => (
-                <ProposalRow key={proposal.id} proposal={proposal} />
+                <ProposalRow
+                  key={proposal.id}
+                  proposal={proposal}
+                  epochInfo={epochInfo}
+                />
               ))}
             </div>
           );
@@ -148,13 +160,33 @@ function ProposalList() {
   );
 }
 
-function ProposalRow({ proposal }: { proposal: Proposal }) {
+function ProposalRow({
+  proposal,
+  epochInfo,
+}: {
+  proposal: Proposal;
+  epochInfo: { currentEpoch: number; secondsPerEpoch: number } | null;
+}) {
   const created = new Date(proposal.created_at).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const isTerminal =
+    proposal.status === "committed" ||
+    proposal.status === "failed" ||
+    proposal.status === "expired" ||
+    proposal.status === "invalid";
+
+  const timeEstimate =
+    epochInfo && !isTerminal
+      ? formatEpochDelta(
+          proposal.epoch_max - epochInfo.currentEpoch,
+          epochInfo.secondsPerEpoch
+        )
+      : null;
 
   return (
     <Link
@@ -169,7 +201,19 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
             {proposal.id.slice(0, 8)}...
           </code>
           <p className="text-xs text-muted-foreground">
-            Epochs {proposal.epoch_min}–{proposal.epoch_max}
+            {timeEstimate ? (
+              <>
+                {timeEstimate}
+                <span className="text-muted-foreground/60">
+                  {" "}
+                  · epochs {proposal.epoch_min}–{proposal.epoch_max}
+                </span>
+              </>
+            ) : (
+              <>
+                Epochs {proposal.epoch_min}–{proposal.epoch_max}
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -236,10 +280,15 @@ function WalletStatus() {
                   className="flex items-center gap-3 text-sm"
                 >
                   <span className="font-medium">{account.label}</span>
-                  <code className="text-xs text-muted-foreground font-mono">
+                  <a
+                    href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${account.address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground font-mono hover:text-accent transition-colors"
+                  >
                     {account.address.slice(0, 20)}...
                     {account.address.slice(-8)}
-                  </code>
+                  </a>
                 </div>
               ))}
             </div>
@@ -264,9 +313,21 @@ function AccessRuleDisplay() {
         Multisig Access Rule
       </h2>
       <p className="text-xs text-muted-foreground mb-4 font-mono">
-        {envVars.DAPP_DEFINITION_ADDRESS
-          ? `Account: ${envVars.DAPP_DEFINITION_ADDRESS.slice(0, 20)}...`
-          : "Account not configured"}
+        {envVars.MULTISIG_ACCOUNT_ADDRESS ? (
+          <>
+            Account:{" "}
+            <a
+              href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${envVars.MULTISIG_ACCOUNT_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-accent transition-colors"
+            >
+              {envVars.MULTISIG_ACCOUNT_ADDRESS.slice(0, 20)}...
+            </a>
+          </>
+        ) : (
+          "Account not configured"
+        )}
       </p>
 
       {Result.builder(accessRuleResult)
