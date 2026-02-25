@@ -59,35 +59,15 @@ export const makeSignProposalAtom = (
       })
   );
 
-export const makePrepareSubmissionAtom = (id: string) =>
-  runtime.fn((feePayerAccount: string) =>
-    Effect.gen(function* () {
-      const client = yield* OrchestratorClient;
-      return yield* client.prepareSubmission(id, feePayerAccount);
-    })
-  );
-
 export const makeSubmitProposalAtom = (
   proposalDetailAtom: ReturnType<typeof makeProposalDetailAtom>
 ) =>
-  runtime.fn(
-    (
-      input: {
-        proposalId: string;
-        signedFeePaymentHex: string;
-        feePayerAccount: string;
-      },
-      get
-    ) =>
-      Effect.gen(function* () {
-        const client = yield* OrchestratorClient;
-        const result = yield* client.submitProposal(
-          input.proposalId,
-          input.signedFeePaymentHex,
-          input.feePayerAccount
-        );
-        get.refresh(proposalDetailAtom);
-        get.refresh(proposalListAtom);
-        return result;
-      })
+  runtime.fn((proposalId: string, get) =>
+    Effect.gen(function* () {
+      const client = yield* OrchestratorClient;
+      const result = yield* client.submitProposal(proposalId);
+      get.refresh(proposalDetailAtom);
+      get.refresh(proposalListAtom);
+      return result;
+    })
   );

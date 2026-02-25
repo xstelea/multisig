@@ -8,6 +8,8 @@ use rand::Rng;
 pub struct SubintentResult {
     pub subintent_hash: String,
     pub intent_discriminator: u64,
+    pub min_proposer_timestamp: i64,
+    pub max_proposer_timestamp: i64,
     pub partial_transaction_bytes: Vec<u8>,
 }
 
@@ -15,7 +17,9 @@ pub struct SubintentResult {
 ///
 /// Appends `YIELD_TO_PARENT;` to the manifest if not present,
 /// compiles it, wraps in a PartialTransactionV2 with the given
-/// epoch window and a cryptographically random discriminator.
+/// epoch window, a safe random discriminator (≤ 2^53 so it
+/// round-trips through JavaScript f64 without precision loss),
+/// and a 24-hour proposer-timestamp window anchored to now.
 pub fn build_unsigned_subintent(
     manifest_text: &str,
     network_id: u8,
@@ -23,24 +27,55 @@ pub fn build_unsigned_subintent(
     epoch_max: u64,
 ) -> Result<SubintentResult> {
     let mut rng = rand::thread_rng();
-    let discriminator: u64 = rng.gen();
+    // Keep discriminator in the JavaScript safe-integer range (< 2^53) so it
+    // is transmitted as a JSON number without precision loss and is always a
+    // valid positive value when the wallet parses it.
+    let discriminator: u64 = rng.gen::<u64>() % (1u64 << 53);
 
-    build_unsigned_subintent_with_discriminator(
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    build_unsigned_subintent_inner(
         manifest_text,
         network_id,
         epoch_min,
         epoch_max,
         discriminator,
+        now_secs,
+        now_secs + 86400,
     )
 }
 
-/// Build an unsigned subintent with a specific discriminator (for testing).
+/// Build an unsigned subintent with explicit discriminator and timestamps (for testing).
+#[cfg(test)]
 pub fn build_unsigned_subintent_with_discriminator(
     manifest_text: &str,
     network_id: u8,
     epoch_min: u64,
     epoch_max: u64,
     discriminator: u64,
+) -> Result<SubintentResult> {
+    build_unsigned_subintent_inner(
+        manifest_text,
+        network_id,
+        epoch_min,
+        epoch_max,
+        discriminator,
+        0,
+        86400,
+    )
+}
+
+fn build_unsigned_subintent_inner(
+    manifest_text: &str,
+    network_id: u8,
+    epoch_min: u64,
+    epoch_max: u64,
+    discriminator: u64,
+    min_proposer_timestamp: i64,
+    max_proposer_timestamp: i64,
 ) -> Result<SubintentResult> {
     // Append YIELD_TO_PARENT if not present
     let full_manifest = if manifest_text.contains("YIELD_TO_PARENT") {
@@ -61,15 +96,20 @@ pub fn build_unsigned_subintent_with_discriminator(
         compile_manifest(&full_manifest, &network, BlobProvider::new())
             .map_err(|e| anyhow::anyhow!("Failed to compile manifest: {e:?}"))?;
 
-    // Build the unsigned partial transaction
+    // Build the unsigned partial transaction — timestamps are baked in here so
+    // the wallet (given the same header values) will produce identical bytes.
     let partial_tx = PartialTransactionV2Builder::new()
         .intent_header(IntentHeaderV2 {
             network_id,
             start_epoch_inclusive: Epoch::of(epoch_min),
             end_epoch_exclusive: Epoch::of(epoch_max),
             intent_discriminator: discriminator,
-            min_proposer_timestamp_inclusive: None,
-            max_proposer_timestamp_exclusive: None,
+            min_proposer_timestamp_inclusive: Some(Instant {
+                seconds_since_unix_epoch: min_proposer_timestamp,
+            }),
+            max_proposer_timestamp_exclusive: Some(Instant {
+                seconds_since_unix_epoch: max_proposer_timestamp,
+            }),
         })
         .manifest(manifest)
         .build();
@@ -89,6 +129,8 @@ pub fn build_unsigned_subintent_with_discriminator(
     Ok(SubintentResult {
         subintent_hash,
         intent_discriminator: discriminator,
+        min_proposer_timestamp,
+        max_proposer_timestamp,
         partial_transaction_bytes: bytes,
     })
 }
@@ -165,14 +207,15 @@ pub fn reconstruct_signed_partial(
 }
 
 /// Compose a complete NotarizedTransactionV2 with:
-/// - Child "fee_payment": fee payer's signed subintent (lock_fee)
 /// - Child "withdrawal": DAO signed subintent (with all collected signatures)
-/// - Main intent: yield_to_child("fee_payment") + yield_to_child("withdrawal")
-/// - Notarized by server-side ephemeral key
+/// - Main intent: lock_fee(fee_payer_account) + yield_to_child("withdrawal")
+/// - Fee paid by server's own account (notary_is_signatory: true)
+/// - Notarized by the server fee payer key
 pub fn compose_main_transaction(
     network_id: u8,
     current_epoch: u64,
-    fee_signed_partial: SignedPartialTransactionV2,
+    fee_payer_private_key: &Ed25519PrivateKey,
+    fee_payer_account: ComponentAddress,
     withdrawal_signed_partial: SignedPartialTransactionV2,
 ) -> Result<ComposedTransaction> {
     let mut rng = rand::thread_rng();
@@ -181,7 +224,8 @@ pub fn compose_main_transaction(
     compose_main_transaction_with_discriminator(
         network_id,
         current_epoch,
-        fee_signed_partial,
+        fee_payer_private_key,
+        fee_payer_account,
         withdrawal_signed_partial,
         discriminator,
     )
@@ -191,7 +235,8 @@ pub fn compose_main_transaction(
 pub fn compose_main_transaction_with_discriminator(
     network_id: u8,
     current_epoch: u64,
-    fee_signed_partial: SignedPartialTransactionV2,
+    fee_payer_private_key: &Ed25519PrivateKey,
+    fee_payer_account: ComponentAddress,
     withdrawal_signed_partial: SignedPartialTransactionV2,
     discriminator: u64,
 ) -> Result<ComposedTransaction> {
@@ -202,18 +247,16 @@ pub fn compose_main_transaction_with_discriminator(
         _ => return Err(anyhow!("Unsupported network ID: {network_id}")),
     };
 
-    // Generate ephemeral notary key (server-side, not controlling any account)
-    let notary_private_key = Ed25519PrivateKey::from_u64(rng_u64()).unwrap();
-    let notary_public_key: PublicKey = notary_private_key.public_key().into();
+    let fee_payer_public_key: PublicKey = fee_payer_private_key.public_key().into();
 
-    // Build the main transaction with two child subintents
+    // Build the main transaction with the withdrawal child.
+    // notary_is_signatory: true means the notary's key is also a signatory,
+    // authorising the lock_fee call without a separate .sign() step.
     let detailed = TransactionV2Builder::new()
-        // Children must be added BEFORE manifest_builder
-        .add_signed_child("fee_payment", fee_signed_partial)
         .add_signed_child("withdrawal", withdrawal_signed_partial)
         .transaction_header(TransactionHeaderV2 {
-            notary_public_key,
-            notary_is_signatory: false, // Ephemeral notary doesn't sign for any account
+            notary_public_key: fee_payer_public_key,
+            notary_is_signatory: true,
             tip_basis_points: 0,
         })
         .intent_header(IntentHeaderV2 {
@@ -226,10 +269,10 @@ pub fn compose_main_transaction_with_discriminator(
         })
         .manifest_builder(|builder| {
             builder
-                .yield_to_child("fee_payment", ())
+                .lock_fee(fee_payer_account, Decimal::from(10u32))
                 .yield_to_child("withdrawal", ())
         })
-        .notarize(&notary_private_key)
+        .notarize(fee_payer_private_key)
         .build_no_validate();
 
     // Encode the transaction intent hash
@@ -245,32 +288,6 @@ pub fn compose_main_transaction_with_discriminator(
         notarized_transaction_hex: notarized_hex,
         intent_hash,
     })
-}
-
-/// Generate a random u64 for ephemeral keys. Not cryptographically important
-/// since the notary key doesn't control any account.
-fn rng_u64() -> u64 {
-    let mut rng = rand::thread_rng();
-    // Ensure non-zero (Ed25519PrivateKey::from_u64 requires it)
-    loop {
-        let v: u64 = rng.gen();
-        if v != 0 {
-            return v;
-        }
-    }
-}
-
-/// Build the fee payment manifest text for the fee payer to sign via sendPreAuthorizationRequest.
-pub fn build_fee_manifest(fee_payer_account: &str, lock_fee_amount: &str) -> String {
-    format!(
-        r#"CALL_METHOD
-    Address("{fee_payer_account}")
-    "lock_fee"
-    Decimal("{lock_fee_amount}")
-;
-YIELD_TO_PARENT;
-"#
-    )
 }
 
 #[cfg(test)]
@@ -467,22 +484,17 @@ CALL_METHOD
 
     #[test]
     fn compose_main_transaction_produces_valid_output() {
-        // Build a fee payment subintent
-        let fee_manifest = r#"CALL_METHOD
-    Address("account_tdx_2_12xsvygvltz4uhsht6tdrfxktzpmnl77r0d40j8agmujgdj02el3l9v")
-    "lock_fee"
-    Decimal("10")
-;"#;
-        let fee_partial = build_test_signed_partial(fee_manifest, &[10], 100);
+        let fee_payer_key = Ed25519PrivateKey::from_u64(10).unwrap();
+        let fee_payer_account =
+            ComponentAddress::preallocated_account_from_public_key(&fee_payer_key.public_key());
 
-        // Build a withdrawal subintent with 3 signers
         let withdrawal_partial = build_test_signed_partial(sample_manifest(), &[1, 2, 3], 200);
 
-        // Compose main transaction
         let result = compose_main_transaction_with_discriminator(
             TEST_NETWORK_ID,
             1000,
-            fee_partial,
+            &fee_payer_key,
+            fee_payer_account,
             withdrawal_partial,
             999,
         );
@@ -500,20 +512,18 @@ CALL_METHOD
 
     #[test]
     fn compose_main_transaction_different_discriminators_produce_different_hashes() {
-        let fee_manifest = r#"CALL_METHOD
-    Address("account_tdx_2_12xsvygvltz4uhsht6tdrfxktzpmnl77r0d40j8agmujgdj02el3l9v")
-    "lock_fee"
-    Decimal("10")
-;"#;
-        let fee1 = build_test_signed_partial(fee_manifest, &[10], 100);
-        let fee2 = build_test_signed_partial(fee_manifest, &[10], 101);
+        let fee_payer_key = Ed25519PrivateKey::from_u64(10).unwrap();
+        let fee_payer_account =
+            ComponentAddress::preallocated_account_from_public_key(&fee_payer_key.public_key());
+
         let withdrawal1 = build_test_signed_partial(sample_manifest(), &[1, 2, 3], 200);
         let withdrawal2 = build_test_signed_partial(sample_manifest(), &[1, 2, 3], 201);
 
         let a = compose_main_transaction_with_discriminator(
             TEST_NETWORK_ID,
             1000,
-            fee1,
+            &fee_payer_key,
+            fee_payer_account,
             withdrawal1,
             111,
         )
@@ -522,34 +532,14 @@ CALL_METHOD
         let b = compose_main_transaction_with_discriminator(
             TEST_NETWORK_ID,
             1000,
-            fee2,
+            &fee_payer_key,
+            fee_payer_account,
             withdrawal2,
             222,
         )
         .unwrap();
 
         assert_ne!(a.intent_hash, b.intent_hash);
-    }
-
-    #[test]
-    fn build_fee_manifest_produces_valid_rtm() {
-        let manifest = build_fee_manifest(
-            "account_tdx_2_12xsvygvltz4uhsht6tdrfxktzpmnl77r0d40j8agmujgdj02el3l9v",
-            "10",
-        );
-
-        assert!(manifest.contains("lock_fee"));
-        assert!(manifest.contains("YIELD_TO_PARENT"));
-
-        // Should compile as a valid subintent manifest
-        let network = NetworkDefinition::stokenet();
-        let result: std::result::Result<SubintentManifestV2, _> =
-            compile_manifest(&manifest, &network, BlobProvider::new());
-        assert!(
-            result.is_ok(),
-            "Fee manifest should compile: {:?}",
-            result.err()
-        );
     }
 
     #[test]

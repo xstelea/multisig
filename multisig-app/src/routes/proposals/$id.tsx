@@ -9,19 +9,18 @@ import {
   makeProposalDetailAtom,
   makeSignatureStatusAtom,
   makeSignProposalAtom,
-  makePrepareSubmissionAtom,
   makeSubmitProposalAtom,
 } from "@/atom/proposalAtoms";
 import { walletDataAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useMemo, useState, useCallback } from "react";
+import { SubintentRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
 import type {
   Proposal,
   SignatureStatusType,
   SignerStatus,
   SubmitProposalResponse,
 } from "@/atom/orchestratorClient";
-import { SubintentRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
 
 export const Route = createFileRoute("/proposals/$id")({
   component: ProposalDetailPage,
@@ -94,7 +93,6 @@ function ProposalDetail({ id }: { id: string }) {
     () => makeSignProposalAtom(proposalAtom, sigStatusAtom),
     [proposalAtom, sigStatusAtom]
   );
-  const prepareAtom = useMemo(() => makePrepareSubmissionAtom(id), [id]);
   const submitAtom = useMemo(
     () => makeSubmitProposalAtom(proposalAtom),
     [proposalAtom]
@@ -107,7 +105,6 @@ function ProposalDetail({ id }: { id: string }) {
         proposal={proposal}
         sigStatusAtom={sigStatusAtom}
         signAtom={signAtom}
-        prepareAtom={prepareAtom}
         submitAtom={submitAtom}
       />
     ))
@@ -124,13 +121,11 @@ function ProposalContent({
   proposal,
   sigStatusAtom,
   signAtom,
-  prepareAtom,
   submitAtom,
 }: {
   proposal: Proposal;
   sigStatusAtom: ReturnType<typeof makeSignatureStatusAtom>;
   signAtom: ReturnType<typeof makeSignProposalAtom>;
-  prepareAtom: ReturnType<typeof makePrepareSubmissionAtom>;
   submitAtom: ReturnType<typeof makeSubmitProposalAtom>;
 }) {
   const created = new Date(proposal.created_at).toLocaleString("en-US", {
@@ -191,11 +186,7 @@ function ProposalContent({
 
       {/* Submit section — shown when proposal is ready */}
       {proposal.status === "ready" && (
-        <SubmitSection
-          proposal={proposal}
-          prepareAtom={prepareAtom}
-          submitAtom={submitAtom}
-        />
+        <SubmitSection proposal={proposal} submitAtom={submitAtom} />
       )}
 
       {/* Transaction result — shown when committed or failed */}
@@ -304,13 +295,7 @@ function SignatureStatusDisplay({
       </div>
 
       {/* Sign button */}
-      {canSign && (
-        <SignButton
-          proposalId={proposal.id}
-          manifest={proposal.manifest_text}
-          signAtom={signAtom}
-        />
-      )}
+      {canSign && <SignButton proposal={proposal} signAtom={signAtom} />}
     </div>
   );
 }
@@ -355,12 +340,10 @@ function SignerStatusRow({ signer }: { signer: SignerStatus }) {
 }
 
 function SignButton({
-  proposalId,
-  manifest,
+  proposal,
   signAtom,
 }: {
-  proposalId: string;
-  manifest: string;
+  proposal: Proposal;
   signAtom: ReturnType<typeof makeSignProposalAtom>;
 }) {
   const walletResult = useAtomValue(walletDataAtom);
@@ -378,6 +361,7 @@ function SignButton({
   const handleSign = useCallback(async () => {
     setError(null);
     setSigning(true);
+    console.log("[SignButton] handleSign started", { proposalId: proposal.id });
     try {
       const rdt = Result.builder(rdtResult)
         .onSuccess((r) => r)
@@ -386,42 +370,66 @@ function SignButton({
         .render();
 
       if (!rdt) {
+        console.warn("[SignButton] rdt is null — wallet not connected");
         setError("Wallet not connected");
         setSigning(false);
         return;
       }
 
       // Build manifest with YIELD_TO_PARENT if not present
-      const subintentManifest = manifest.includes("YIELD_TO_PARENT")
-        ? manifest
-        : `${manifest.trimEnd()}\nYIELD_TO_PARENT;\n`;
+      const subintentManifest = proposal.manifest_text.includes(
+        "YIELD_TO_PARENT"
+      )
+        ? proposal.manifest_text
+        : `${proposal.manifest_text.trimEnd()}\nYIELD_TO_PARENT;\n`;
 
-      // Send pre-authorization request to wallet via SubintentRequestBuilder
+      const header = {
+        startEpochInclusive: proposal.epoch_min,
+        endEpochExclusive: proposal.epoch_max,
+        intentDiscriminator: proposal.intent_discriminator,
+        minProposerTimestampInclusive: proposal.min_proposer_timestamp,
+        maxProposerTimestampExclusive: proposal.max_proposer_timestamp,
+      };
+      console.log("[SignButton] sending preauth request", { header });
+
+      // Send pre-authorization request to wallet with the server's exact epoch window,
+      // discriminator, and timestamp bounds — all fixed at proposal creation time so
+      // every signer produces the same subintent hash.
       const result = await rdt.walletApi.sendPreAuthorizationRequest(
         SubintentRequestBuilder()
           .manifest(subintentManifest)
+          .header(header)
           .setExpiration("afterDelay", 3600)
       );
 
+      console.log("[SignButton] preauth result", result);
+
       if (result.isErr()) {
-        setError(`Wallet error: ${result.error.message ?? "Unknown error"}`);
+        console.error("[SignButton] preauth error", result.error);
+        setError(
+          `Wallet error: ${result.error.error} — ${result.error.message ?? "Unknown error"}`
+        );
         setSigning(false);
         return;
       }
 
       const { signedPartialTransaction } = result.value;
+      console.log(
+        "[SignButton] got signedPartialTransaction, sending to backend"
+      );
 
       // Send signed partial to backend
       await signProposal({
-        proposalId,
+        proposalId: proposal.id,
         signedPartialTransactionHex: signedPartialTransaction,
       });
     } catch (e) {
+      console.error("[SignButton] exception", e);
       setError(String(e));
     } finally {
       setSigning(false);
     }
-  }, [rdtResult, manifest, signProposal, proposalId]);
+  }, [rdtResult, proposal, signProposal]);
 
   if (!isConnected) {
     return (
@@ -447,106 +455,30 @@ function SignButton({
 
 function SubmitSection({
   proposal,
-  prepareAtom,
   submitAtom,
 }: {
   proposal: Proposal;
-  prepareAtom: ReturnType<typeof makePrepareSubmissionAtom>;
   submitAtom: ReturnType<typeof makeSubmitProposalAtom>;
 }) {
-  const walletResult = useAtomValue(walletDataAtom);
-  const rdtResult = useAtomValue(dappToolkitAtom);
-  const prepareSubmission = useAtomSet(prepareAtom, { mode: "promise" });
   const submitProposal = useAtomSet(submitAtom, { mode: "promise" });
 
   const [submitting, setSubmitting] = useState(false);
-  const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitProposalResponse | null>(null);
 
-  const connectedAccount = Result.builder(walletResult)
-    .onSuccess((data) => data?.accounts?.[0]?.address ?? null)
-    .onInitial(() => null)
-    .onFailure(() => null)
-    .render();
-
   const handleSubmit = useCallback(async () => {
-    if (!connectedAccount) return;
-
     setError(null);
     setResult(null);
     setSubmitting(true);
-
     try {
-      // Step 1: Get fee manifest from backend
-      setStep("Preparing fee payment...");
-      const prepared = await prepareSubmission(connectedAccount);
-
-      // Step 2: Send fee manifest to wallet for signing
-      setStep("Sign fee payment in your wallet...");
-      const rdt = Result.builder(rdtResult)
-        .onSuccess((r) => r)
-        .onInitial(() => null)
-        .onFailure(() => null)
-        .render();
-
-      if (!rdt) {
-        setError("Wallet not connected");
-        setSubmitting(false);
-        setStep(null);
-        return;
-      }
-
-      const walletResult2 = await rdt.walletApi.sendPreAuthorizationRequest(
-        SubintentRequestBuilder()
-          .manifest(prepared.fee_manifest)
-          .setExpiration("afterDelay", 3600)
-      );
-
-      if (walletResult2.isErr()) {
-        setError(
-          `Wallet error: ${walletResult2.error.message ?? "Unknown error"}`
-        );
-        setSubmitting(false);
-        setStep(null);
-        return;
-      }
-
-      // Step 3: Submit to backend for composition + Gateway submission
-      setStep("Submitting transaction...");
-      const submitResult = await submitProposal({
-        proposalId: proposal.id,
-        signedFeePaymentHex: walletResult2.value.signedPartialTransaction,
-        feePayerAccount: connectedAccount,
-      });
-
+      const submitResult = await submitProposal(proposal.id);
       setResult(submitResult);
     } catch (e) {
       setError(String(e));
     } finally {
       setSubmitting(false);
-      setStep(null);
     }
-  }, [
-    connectedAccount,
-    rdtResult,
-    prepareSubmission,
-    submitProposal,
-    proposal.id,
-  ]);
-
-  if (!connectedAccount) {
-    return (
-      <section className="border border-border rounded-lg p-6 bg-card space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-          Submit Transaction
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Connect your wallet to submit this proposal as the fee payer.
-        </p>
-      </section>
-    );
-  }
+  }, [submitProposal, proposal.id]);
 
   return (
     <section className="border border-border rounded-lg p-6 bg-card space-y-4">
@@ -554,8 +486,8 @@ function SubmitSection({
         Submit Transaction
       </h2>
       <p className="text-sm text-muted-foreground">
-        All signatures collected. Submit this proposal by paying the transaction
-        fee.
+        All signatures collected. The server will pay the transaction fee and
+        submit to the network.
       </p>
 
       <div className="space-y-3">
@@ -564,12 +496,8 @@ function SubmitSection({
           disabled={submitting}
           className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? "Submitting..." : "Pay Fee & Submit"}
+          {submitting ? "Submitting..." : "Submit"}
         </button>
-
-        {step && (
-          <p className="text-sm text-muted-foreground animate-pulse">{step}</p>
-        )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 

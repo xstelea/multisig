@@ -48,6 +48,8 @@ pub struct Proposal {
     pub status: ProposalStatus,
     pub subintent_hash: Option<String>,
     pub intent_discriminator: i64,
+    pub min_proposer_timestamp: i64,
+    pub max_proposer_timestamp: i64,
     pub created_at: DateTime<Utc>,
     pub submitted_at: Option<DateTime<Utc>>,
     pub tx_id: Option<String>,
@@ -61,6 +63,8 @@ pub struct CreateProposal {
     pub epoch_max: i64,
     pub subintent_hash: String,
     pub intent_discriminator: i64,
+    pub min_proposer_timestamp: i64,
+    pub max_proposer_timestamp: i64,
     pub partial_transaction_bytes: Vec<u8>,
 }
 
@@ -76,11 +80,11 @@ impl ProposalStore {
     pub async fn create(&self, input: CreateProposal) -> Result<Proposal> {
         let row = sqlx::query_as::<_, Proposal>(
             r#"
-            INSERT INTO proposals (manifest_text, treasury_account, epoch_min, epoch_max, subintent_hash, intent_discriminator, partial_transaction_bytes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO proposals (manifest_text, treasury_account, epoch_min, epoch_max, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp, partial_transaction_bytes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, manifest_text, treasury_account, epoch_min, epoch_max,
-                      status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
-                      invalid_reason
+                      status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
+                      created_at, submitted_at, tx_id, invalid_reason
             "#,
         )
         .bind(&input.manifest_text)
@@ -89,6 +93,8 @@ impl ProposalStore {
         .bind(input.epoch_max)
         .bind(&input.subintent_hash)
         .bind(input.intent_discriminator)
+        .bind(input.min_proposer_timestamp)
+        .bind(input.max_proposer_timestamp)
         .bind(&input.partial_transaction_bytes)
         .fetch_one(&self.pool)
         .await?;
@@ -100,8 +106,8 @@ impl ProposalStore {
         let row = sqlx::query_as::<_, Proposal>(
             r#"
             SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
-                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
-                   invalid_reason
+                   status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
+                   created_at, submitted_at, tx_id, invalid_reason
             FROM proposals
             WHERE id = $1
             "#,
@@ -117,8 +123,8 @@ impl ProposalStore {
         let rows = sqlx::query_as::<_, Proposal>(
             r#"
             SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
-                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
-                   invalid_reason
+                   status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
+                   created_at, submitted_at, tx_id, invalid_reason
             FROM proposals
             ORDER BY created_at DESC
             "#,
@@ -188,8 +194,8 @@ impl ProposalStore {
         let rows = sqlx::query_as::<_, Proposal>(
             r#"
             SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
-                   status, subintent_hash, intent_discriminator, created_at, submitted_at, tx_id,
-                   invalid_reason
+                   status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
+                   created_at, submitted_at, tx_id, invalid_reason
             FROM proposals
             WHERE status IN ('created', 'signing', 'ready')
             ORDER BY created_at ASC

@@ -16,7 +16,7 @@
     "@effect-atom/atom-react": "^0.4.4",
     "@effect/platform": "^0.82.5",
     "@effect/platform-browser": "^0.62.5",
-    "@radixdlt/radix-dapp-toolkit": "^2.2.1",
+    "@radixdlt/radix-dapp-toolkit": "2.3.0-subintent-header.1",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/react-router": "^1.132.0",
     "@tanstack/react-start": "^1.132.0",

@@ -16,6 +16,10 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
+use radix_common::address::AddressBech32Encoder;
+use radix_common::network::NetworkDefinition;
+use radix_common::prelude::{ComponentAddress, Ed25519PrivateKey};
+
 use crate::gateway::GatewayClient;
 use crate::proposal_store::{CreateProposal, Proposal, ProposalStatus, ProposalStore};
 use crate::signature_collector::{SignatureCollector, SignatureStatus};
@@ -28,6 +32,10 @@ pub struct AppState {
     pub gateway: Arc<GatewayClient>,
     pub multisig_account: String,
     pub network_id: u8,
+    /// Raw bytes of the server's fee-payer Ed25519 private key.
+    pub fee_payer_key_bytes: [u8; 32],
+    /// Bech32-encoded preallocated account address for the fee payer (for logging/recording).
+    pub fee_payer_account: String,
 }
 
 #[derive(serde::Serialize)]
@@ -87,7 +95,9 @@ async fn create_proposal(
         ));
     }
 
-    // Build the unsigned subintent
+    // Build the unsigned subintent — discriminator and timestamp window are
+    // generated inside and returned so we store exactly what was baked into
+    // the partial transaction bytes.
     let subintent_result = transaction_builder::build_unsigned_subintent(
         &req.manifest_text,
         state.network_id,
@@ -112,6 +122,8 @@ async fn create_proposal(
             epoch_max: epoch_max as i64,
             subintent_hash: subintent_result.subintent_hash,
             intent_discriminator: subintent_result.intent_discriminator as i64,
+            min_proposer_timestamp: subintent_result.min_proposer_timestamp,
+            max_proposer_timestamp: subintent_result.max_proposer_timestamp,
             partial_transaction_bytes: subintent_result.partial_transaction_bytes,
         })
         .await
@@ -247,66 +259,6 @@ async fn get_signature_status(
 
 // --- Submission endpoints ---
 
-#[derive(serde::Deserialize)]
-struct PrepareSubmissionRequest {
-    fee_payer_account: String,
-}
-
-#[derive(serde::Serialize)]
-struct PrepareSubmissionResponse {
-    fee_manifest: String,
-    proposal_status: String,
-}
-
-async fn prepare_submission(
-    State(state): State<AppState>,
-    Path(id): Path<uuid::Uuid>,
-    Json(req): Json<PrepareSubmissionRequest>,
-) -> Result<Json<PrepareSubmissionResponse>, (axum::http::StatusCode, String)> {
-    // Validate proposal exists and is in Ready state
-    let proposal = state
-        .proposal_store
-        .get(id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to get proposal: {e}");
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get proposal: {e}"),
-            )
-        })?
-        .ok_or_else(|| {
-            (
-                axum::http::StatusCode::NOT_FOUND,
-                "Proposal not found".to_string(),
-            )
-        })?;
-
-    if proposal.status != ProposalStatus::Ready {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            format!(
-                "Proposal is in {:?} status; must be Ready to submit",
-                proposal.status
-            ),
-        ));
-    }
-
-    // Build the fee manifest for the fee payer to sign via sendPreAuthorizationRequest
-    let fee_manifest = transaction_builder::build_fee_manifest(&req.fee_payer_account, "10");
-
-    Ok(Json(PrepareSubmissionResponse {
-        fee_manifest,
-        proposal_status: format!("{:?}", proposal.status).to_lowercase(),
-    }))
-}
-
-#[derive(serde::Deserialize)]
-struct SubmitProposalRequest {
-    signed_fee_payment_hex: String,
-    fee_payer_account: String,
-}
-
 #[derive(serde::Serialize)]
 struct SubmitProposalResponse {
     status: String,
@@ -317,7 +269,6 @@ struct SubmitProposalResponse {
 async fn submit_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
-    Json(req): Json<SubmitProposalRequest>,
 ) -> Result<Json<SubmitProposalResponse>, (axum::http::StatusCode, String)> {
     // Validate proposal is in Ready state
     let proposal = state
@@ -348,23 +299,17 @@ async fn submit_proposal(
         ));
     }
 
-    // Decode the fee payer's signed partial transaction
-    let fee_bytes = hex::decode(&req.signed_fee_payment_hex).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("Invalid fee payment hex: {e}"),
-        )
-    })?;
-    let fee_signed_partial = {
-        use radix_transactions::prelude::*;
-        let raw = RawSignedPartialTransaction::from_vec(fee_bytes);
-        SignedPartialTransactionV2::from_raw(&raw).map_err(|e| {
+    // Reconstruct the fee payer private key from stored bytes
+    let fee_payer_private_key =
+        Ed25519PrivateKey::from_bytes(&state.fee_payer_key_bytes).map_err(|e| {
+            tracing::error!("Failed to reconstruct fee payer key: {e:?}");
             (
-                axum::http::StatusCode::BAD_REQUEST,
-                format!("Invalid fee payment transaction: {e:?}"),
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "Server fee payer key misconfigured".to_string(),
             )
-        })?
-    };
+        })?;
+    let fee_payer_account =
+        ComponentAddress::preallocated_account_from_public_key(&fee_payer_private_key.public_key());
 
     // Reconstruct the DAO withdrawal signed partial from stored data
     let partial_bytes = state
@@ -419,11 +364,12 @@ async fn submit_proposal(
         )
     })?;
 
-    // Compose the main transaction
+    // Compose the main transaction (server pays fee via its own account)
     let composed = transaction_builder::compose_main_transaction(
         state.network_id,
         current_epoch,
-        fee_signed_partial,
+        &fee_payer_private_key,
+        fee_payer_account,
         withdrawal_signed_partial,
     )
     .map_err(|e| {
@@ -452,7 +398,7 @@ async fn submit_proposal(
         .proposal_store
         .record_submission_attempt(
             id,
-            &req.fee_payer_account,
+            &state.fee_payer_account,
             Some(&composed.intent_hash),
             "submitting",
             None,
@@ -558,6 +504,31 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .expect("MONITOR_INTERVAL_SECS must be a valid u64");
 
+    // Fee payer key: server pays tx fees so the wallet doesn't need a fee subintent.
+    let fee_payer_key_hex = std::env::var("FEE_PAYER_PRIVATE_KEY_HEX")
+        .expect("FEE_PAYER_PRIVATE_KEY_HEX must be set (64 hex chars = 32-byte Ed25519 key)");
+    let fee_payer_key_bytes_vec =
+        hex::decode(&fee_payer_key_hex).expect("FEE_PAYER_PRIVATE_KEY_HEX must be valid hex");
+    let fee_payer_key_bytes: [u8; 32] = fee_payer_key_bytes_vec
+        .try_into()
+        .expect("FEE_PAYER_PRIVATE_KEY_HEX must be exactly 32 bytes (64 hex chars)");
+    let fee_payer_private_key =
+        Ed25519PrivateKey::from_bytes(&fee_payer_key_bytes).expect("Invalid fee payer private key");
+    let fee_payer_account_addr =
+        ComponentAddress::preallocated_account_from_public_key(&fee_payer_private_key.public_key());
+    let network_def = match network_id {
+        0x01 => NetworkDefinition::mainnet(),
+        _ => NetworkDefinition::stokenet(),
+    };
+    let addr_encoder = AddressBech32Encoder::new(&network_def);
+    let fee_payer_account = addr_encoder
+        .encode(fee_payer_account_addr.as_bytes())
+        .expect("Failed to encode fee payer address");
+    tracing::info!(
+        "Server fee payer account: {} — fund this with XRD on Stokenet",
+        fee_payer_account
+    );
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -576,6 +547,8 @@ async fn main() -> anyhow::Result<()> {
         gateway,
         multisig_account,
         network_id,
+        fee_payer_key_bytes,
+        fee_payer_account,
     };
 
     // Spawn validity monitor background task
@@ -603,7 +576,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/proposals/{id}", get(get_proposal))
         .route("/proposals/{id}/sign", post(sign_proposal))
         .route("/proposals/{id}/signatures", get(get_signature_status))
-        .route("/proposals/{id}/prepare", post(prepare_submission))
         .route("/proposals/{id}/submit", post(submit_proposal))
         .layer(cors)
         .with_state(state);
