@@ -9,6 +9,7 @@ import { makeHandleSignAtom } from "@/atom/handleSignAtom";
 import { makePreviewTransactionAtom } from "@/atom/previewAtom";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta } from "@/lib/epochTime";
+import { envVars, dashboardBaseUrl } from "@/lib/envVars";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useMemo, useState, useCallback } from "react";
 import type {
@@ -176,6 +177,17 @@ function ProposalContent({
       <div className="grid grid-cols-2 gap-4">
         <MetadataField label="Created" value={created} />
         <MetadataField label="Epoch Window" value={epochWindowLabel} />
+        <div className="border border-border rounded-lg p-3 bg-card col-span-2">
+          <p className="text-xs text-muted-foreground mb-1">Multisig Account</p>
+          <a
+            href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${proposal.multisig_account}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-mono break-all hover:text-accent transition-colors"
+          >
+            {proposal.multisig_account}
+          </a>
+        </div>
         {proposal.subintent_hash && (
           <MetadataField
             label="Subintent Hash"

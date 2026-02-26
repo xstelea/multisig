@@ -9,7 +9,6 @@ primary_region = 'ams'
   GATEWAY_URL = 'https://babylon-stokenet-gateway.radixdlt.com'
   NETWORK_ID = '2'
   MONITOR_INTERVAL_SECS = '30'
-  MULTISIG_ACCOUNT_ADDRESS = 'account_tdx_2_1cxcaw5ws5wg4h3x6kc8y9kvv99hsc7stda35zek8fm2w3h9tzzk89e'
   FRONTEND_ORIGIN = 'https://multisig-app.fly.dev'
 
 [http_service]

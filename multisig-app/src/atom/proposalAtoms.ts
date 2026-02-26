@@ -15,7 +15,14 @@ export const proposalListAtom = runtime.atom(
 );
 
 export const createProposalAtom = runtime.fn(
-  (input: { manifest_text: string; expiry_epoch: number }, get) =>
+  (
+    input: {
+      manifest_text: string;
+      expiry_epoch: number;
+      multisig_account: string;
+    },
+    get
+  ) =>
     Effect.gen(function* () {
       const client = yield* OrchestratorClient;
       const proposal = yield* client.createProposal(input);

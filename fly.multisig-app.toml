@@ -12,7 +12,6 @@ primary_region = 'ams'
   [build.args]
     VITE_ORCHESTRATOR_URL = 'https://multisig-server.fly.dev'
     VITE_PUBLIC_DAPP_DEFINITION_ADDRESS = 'account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp'
-    VITE_PUBLIC_MULTISIG_ACCOUNT_ADDRESS = 'account_tdx_2_1cxcaw5ws5wg4h3x6kc8y9kvv99hsc7stda35zek8fm2w3h9tzzk89e'
     VITE_PUBLIC_NETWORK_ID = '2'
 
 [http_service]

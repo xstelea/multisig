@@ -1,12 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Result, useAtomValue, useAtomMount } from "@effect-atom/atom-react";
-import { accessRuleAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
+import { dappToolkitAtom } from "@/atom/accessRuleAtom";
 import { proposalListAtom } from "@/atom/proposalAtoms";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta } from "@/lib/epochTime";
-import { envVars, dashboardBaseUrl } from "@/lib/envVars";
 import { ClientOnly } from "@/lib/ClientOnly";
-import type { Proposal, SignerInfo } from "@/atom/orchestratorClient";
+import type { Proposal } from "@/atom/orchestratorClient";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -21,7 +20,7 @@ function HomePage() {
             Multisig Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            Manage proposals and view the multisig account configuration.
+            Manage proposals for multisig accounts.
           </p>
         </div>
         <Link
@@ -32,14 +31,7 @@ function HomePage() {
         </Link>
       </div>
 
-      <ClientOnly
-        fallback={
-          <>
-            <ProposalListSkeleton />
-            <AccessRuleSkeleton />
-          </>
-        }
-      >
+      <ClientOnly fallback={<ProposalListSkeleton />}>
         {() => <HomePageClient />}
       </ClientOnly>
     </div>
@@ -48,12 +40,7 @@ function HomePage() {
 
 function HomePageClient() {
   useAtomMount(dappToolkitAtom);
-  return (
-    <>
-      <ProposalList />
-      <AccessRuleDisplay />
-    </>
-  );
+  return <ProposalList />;
 }
 
 // --- Proposal List ---
@@ -182,6 +169,11 @@ function ProposalRow({
         )
       : null;
 
+  const shortAccount =
+    proposal.multisig_account.length > 24
+      ? `${proposal.multisig_account.slice(0, 16)}...${proposal.multisig_account.slice(-6)}`
+      : proposal.multisig_account;
+
   return (
     <Link
       to="/proposals/$id"
@@ -208,6 +200,7 @@ function ProposalRow({
                 Epochs {proposal.epoch_min}–{proposal.epoch_max}
               </>
             )}
+            <span className="text-muted-foreground/60"> · {shortAccount}</span>
           </p>
         </div>
       </div>
@@ -215,113 +208,5 @@ function ProposalRow({
         {created}
       </span>
     </Link>
-  );
-}
-
-function AccessRuleSkeleton() {
-  return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">
-        Multisig Access Rule
-      </h2>
-      <div className="mt-4 space-y-3">
-        <div className="h-6 w-48 bg-muted rounded animate-pulse" />
-        <div className="h-4 w-full bg-muted rounded animate-pulse" />
-        <div className="h-4 w-full bg-muted rounded animate-pulse" />
-      </div>
-    </section>
-  );
-}
-
-function AccessRuleDisplay() {
-  const accessRuleResult = useAtomValue(accessRuleAtom);
-
-  return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">
-        Multisig Access Rule
-      </h2>
-      <p className="text-xs text-muted-foreground mb-4 font-mono">
-        {envVars.MULTISIG_ACCOUNT_ADDRESS ? (
-          <>
-            Account:{" "}
-            <a
-              href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${envVars.MULTISIG_ACCOUNT_ADDRESS}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-accent transition-colors"
-            >
-              {envVars.MULTISIG_ACCOUNT_ADDRESS.slice(0, 20)}...
-            </a>
-          </>
-        ) : (
-          "Account not configured"
-        )}
-      </p>
-
-      {Result.builder(accessRuleResult)
-        .onInitial(() => (
-          <div className="space-y-3">
-            <div className="h-6 w-48 bg-muted rounded animate-pulse" />
-            <div className="h-4 w-full bg-muted rounded animate-pulse" />
-            <div className="h-4 w-full bg-muted rounded animate-pulse" />
-            <div className="h-4 w-full bg-muted rounded animate-pulse" />
-          </div>
-        ))
-        .onSuccess((accessRule) => (
-          <div className="space-y-4">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold">{accessRule.threshold}</span>
-              <span className="text-muted-foreground">
-                of {accessRule.signers.length} signatures required
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Signers
-              </h3>
-              <div className="divide-y divide-border">
-                {accessRule.signers.map((signer, i) => (
-                  <SignerRow key={signer.key_hash} signer={signer} index={i} />
-                ))}
-              </div>
-            </div>
-          </div>
-        ))
-        .onFailure((error) => (
-          <div className="text-red-400">
-            <p>Failed to load access rule.</p>
-            <p className="text-xs mt-1 text-muted-foreground">
-              {String(error)}
-            </p>
-            <p className="text-xs mt-2 text-muted-foreground">
-              Make sure the backend is running on {envVars.ORCHESTRATOR_URL}
-            </p>
-          </div>
-        ))
-        .render()}
-    </section>
-  );
-}
-
-function SignerRow({ signer, index }: { signer: SignerInfo; index: number }) {
-  return (
-    <div className="py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground w-6">#{index + 1}</span>
-        <div>
-          <code className="text-sm font-mono">
-            {signer.key_hash.slice(0, 12)}...{signer.key_hash.slice(-8)}
-          </code>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {signer.key_type}
-          </p>
-        </div>
-      </div>
-      <code className="text-xs text-muted-foreground font-mono">
-        {signer.badge_local_id}
-      </code>
-    </div>
   );
 }
