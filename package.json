@@ -6,8 +6,8 @@
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "lint": "oxlint",
-    "deploy:app": "fly deploy --config fly.multisig-app.toml",
-    "deploy:server": "fly deploy --config fly.multisig-server.toml"
+    "deploy:app": "fly deploy --depot=false --config fly.multisig-app.toml",
+    "deploy:server": "fly deploy --depot=false --config fly.multisig-server.toml"
   },
   "devDependencies": {
     "husky": "^9.1.7",

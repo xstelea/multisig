@@ -16,7 +16,7 @@ ARG VITE_PUBLIC_DAPP_DEFINITION_ADDRESS
 ARG VITE_ORCHESTRATOR_URL
 
 WORKDIR /app/multisig-app
-RUN pnpm run build
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 
 # Runtime stage
 FROM node:22-alpine
