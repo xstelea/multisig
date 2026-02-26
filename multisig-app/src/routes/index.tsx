@@ -1,10 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Result, useAtomValue, useAtomMount } from "@effect-atom/atom-react";
-import {
-  accessRuleAtom,
-  walletDataAtom,
-  dappToolkitAtom,
-} from "@/atom/accessRuleAtom";
+import { accessRuleAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
 import { proposalListAtom } from "@/atom/proposalAtoms";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta } from "@/lib/epochTime";
@@ -39,7 +35,6 @@ function HomePage() {
       <ClientOnly
         fallback={
           <>
-            <WalletStatusSkeleton />
             <ProposalListSkeleton />
             <AccessRuleSkeleton />
           </>
@@ -55,7 +50,6 @@ function HomePageClient() {
   useAtomMount(dappToolkitAtom);
   return (
     <>
-      <WalletStatus />
       <ProposalList />
       <AccessRuleDisplay />
     </>
@@ -224,17 +218,6 @@ function ProposalRow({
   );
 }
 
-function WalletStatusSkeleton() {
-  return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-        Connected Wallet
-      </h2>
-      <p className="text-muted-foreground">Connecting to wallet...</p>
-    </section>
-  );
-}
-
 function AccessRuleSkeleton() {
   return (
     <section className="border border-border rounded-lg p-6 bg-card">
@@ -246,60 +229,6 @@ function AccessRuleSkeleton() {
         <div className="h-4 w-full bg-muted rounded animate-pulse" />
         <div className="h-4 w-full bg-muted rounded animate-pulse" />
       </div>
-    </section>
-  );
-}
-
-function WalletStatus() {
-  const walletResult = useAtomValue(walletDataAtom);
-
-  return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-        Connected Wallet
-      </h2>
-      {Result.builder(walletResult)
-        .onInitial(() => (
-          <p className="text-muted-foreground">Connecting to wallet...</p>
-        ))
-        .onSuccess((walletData) => {
-          if (!walletData) return null;
-          const accounts = walletData.accounts ?? [];
-          if (accounts.length === 0) {
-            return (
-              <p className="text-muted-foreground">
-                No accounts connected. Click the connect button above.
-              </p>
-            );
-          }
-          return (
-            <div className="space-y-2">
-              {accounts.map((account) => (
-                <div
-                  key={account.address}
-                  className="flex items-center gap-3 text-sm"
-                >
-                  <span className="font-medium">{account.label}</span>
-                  <a
-                    href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${account.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground font-mono hover:text-accent transition-colors"
-                  >
-                    {account.address.slice(0, 20)}...
-                    {account.address.slice(-8)}
-                  </a>
-                </div>
-              ))}
-            </div>
-          );
-        })
-        .onFailure(() => (
-          <p className="text-muted-foreground">
-            Wallet not available. Install the Radix Wallet extension.
-          </p>
-        ))
-        .render()}
     </section>
   );
 }

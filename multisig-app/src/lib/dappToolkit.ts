@@ -1,6 +1,5 @@
 import {
   RadixDappToolkit as RadixDappToolkitFactory,
-  DataRequestBuilder,
   Logger,
 } from "@radixdlt/radix-dapp-toolkit";
 import { Context, Effect, Layer, Ref } from "effect";
@@ -24,8 +23,6 @@ export class RadixDappToolkit extends Context.Tag("RadixDappToolkit")<
         dAppDefinitionAddress: envVars.DAPP_DEFINITION_ADDRESS,
         logger: Logger(),
       });
-
-      rdt.walletApi.setRequestData(DataRequestBuilder.accounts().atLeast(1));
 
       yield* Effect.addFinalizer(() => Effect.sync(() => rdt.destroy()));
 

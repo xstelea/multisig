@@ -1,22 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Result,
-  useAtomValue,
-  useAtomSet,
-  useAtomMount,
-} from "@effect-atom/atom-react";
+import { Result, useAtomValue, useAtomSet } from "@effect-atom/atom-react";
 import {
   makeProposalDetailAtom,
   makeSignatureStatusAtom,
-  makeSignProposalAtom,
   makeSubmitProposalAtom,
 } from "@/atom/proposalAtoms";
-import { walletDataAtom, dappToolkitAtom } from "@/atom/accessRuleAtom";
+import { makeHandleSignAtom } from "@/atom/handleSignAtom";
+import { makePreviewTransactionAtom } from "@/atom/previewAtom";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useMemo, useState, useCallback } from "react";
-import { SubintentRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
 import type {
   Proposal,
   SignatureStatusType,
@@ -89,16 +83,15 @@ function ProposalDetail({ id }: { id: string }) {
   const sigStatusAtom = useMemo(() => makeSignatureStatusAtom(id), [id]);
   const proposalResult = useAtomValue(proposalAtom);
 
-  useAtomMount(dappToolkitAtom);
-
-  const signAtom = useMemo(
-    () => makeSignProposalAtom(proposalAtom, sigStatusAtom),
+  const handleSignAtom = useMemo(
+    () => makeHandleSignAtom(proposalAtom, sigStatusAtom),
     [proposalAtom, sigStatusAtom]
   );
   const submitAtom = useMemo(
     () => makeSubmitProposalAtom(proposalAtom),
     [proposalAtom]
   );
+  const previewAtom = useMemo(() => makePreviewTransactionAtom(), []);
 
   return Result.builder(proposalResult)
     .onInitial(() => <DetailSkeleton />)
@@ -106,8 +99,9 @@ function ProposalDetail({ id }: { id: string }) {
       <ProposalContent
         proposal={proposal}
         sigStatusAtom={sigStatusAtom}
-        signAtom={signAtom}
+        handleSignAtom={handleSignAtom}
         submitAtom={submitAtom}
+        previewAtom={previewAtom}
       />
     ))
     .onFailure((error) => (
@@ -122,13 +116,15 @@ function ProposalDetail({ id }: { id: string }) {
 function ProposalContent({
   proposal,
   sigStatusAtom,
-  signAtom,
+  handleSignAtom,
   submitAtom,
+  previewAtom,
 }: {
   proposal: Proposal;
   sigStatusAtom: ReturnType<typeof makeSignatureStatusAtom>;
-  signAtom: ReturnType<typeof makeSignProposalAtom>;
+  handleSignAtom: ReturnType<typeof makeHandleSignAtom>;
   submitAtom: ReturnType<typeof makeSubmitProposalAtom>;
+  previewAtom: ReturnType<typeof makePreviewTransactionAtom>;
 }) {
   const created = new Date(proposal.created_at).toLocaleString("en-US", {
     dateStyle: "medium",
@@ -203,7 +199,7 @@ function ProposalContent({
         sigStatusAtom={sigStatusAtom}
         canSign={canSign}
         proposal={proposal}
-        signAtom={signAtom}
+        handleSignAtom={handleSignAtom}
       />
 
       {/* Submit section — shown when proposal is ready */}
@@ -215,6 +211,12 @@ function ProposalContent({
       {(proposal.status === "committed" || proposal.status === "failed") && (
         <TransactionResult proposal={proposal} />
       )}
+
+      {/* Transaction preview */}
+      <TransactionPreview
+        manifestText={proposal.manifest_text}
+        previewAtom={previewAtom}
+      />
 
       {/* Manifest text */}
       <section className="space-y-2">
@@ -233,12 +235,12 @@ function SignatureProgress({
   sigStatusAtom,
   canSign,
   proposal,
-  signAtom,
+  handleSignAtom,
 }: {
   sigStatusAtom: ReturnType<typeof makeSignatureStatusAtom>;
   canSign: boolean;
   proposal: Proposal;
-  signAtom: ReturnType<typeof makeSignProposalAtom>;
+  handleSignAtom: ReturnType<typeof makeHandleSignAtom>;
 }) {
   const sigStatusResult = useAtomValue(sigStatusAtom);
 
@@ -260,7 +262,7 @@ function SignatureProgress({
             sigStatus={sigStatus}
             canSign={canSign}
             proposal={proposal}
-            signAtom={signAtom}
+            handleSignAtom={handleSignAtom}
           />
         ))
         .onFailure((error) => (
@@ -277,12 +279,12 @@ function SignatureStatusDisplay({
   sigStatus,
   canSign,
   proposal,
-  signAtom,
+  handleSignAtom,
 }: {
   sigStatus: SignatureStatusType;
   canSign: boolean;
   proposal: Proposal;
-  signAtom: ReturnType<typeof makeSignProposalAtom>;
+  handleSignAtom: ReturnType<typeof makeHandleSignAtom>;
 }) {
   return (
     <div className="space-y-4">
@@ -317,7 +319,9 @@ function SignatureStatusDisplay({
       </div>
 
       {/* Sign button */}
-      {canSign && <SignButton proposal={proposal} signAtom={signAtom} />}
+      {canSign && (
+        <SignButton proposal={proposal} handleSignAtom={handleSignAtom} />
+      )}
     </div>
   );
 }
@@ -363,128 +367,31 @@ function SignerStatusRow({ signer }: { signer: SignerStatus }) {
 
 function SignButton({
   proposal,
-  signAtom,
+  handleSignAtom,
 }: {
   proposal: Proposal;
-  signAtom: ReturnType<typeof makeSignProposalAtom>;
+  handleSignAtom: ReturnType<typeof makeHandleSignAtom>;
 }) {
-  const walletResult = useAtomValue(walletDataAtom);
-  const rdtResult = useAtomValue(dappToolkitAtom);
-  const signProposal = useAtomSet(signAtom, { mode: "promise" });
+  const handleSign = useAtomSet(handleSignAtom, { mode: "promise" });
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isConnected = Result.builder(walletResult)
-    .onSuccess((data) => (data?.accounts?.length ?? 0) > 0)
-    .onInitial(() => false)
-    .onFailure(() => false)
-    .render();
-
-  const handleSign = useCallback(async () => {
+  const onSign = useCallback(async () => {
     setError(null);
     setSigning(true);
-    console.log("[SignButton] handleSign started", { proposalId: proposal.id });
     try {
-      const rdt = Result.builder(rdtResult)
-        .onSuccess((r) => r)
-        .onInitial(() => null)
-        .onFailure(() => null)
-        .render();
-
-      if (!rdt) {
-        console.warn("[SignButton] rdt is null — wallet not connected");
-        setError("Wallet not connected");
-        setSigning(false);
-        return;
-      }
-
-      // Build manifest with YIELD_TO_PARENT if not present
-      const subintentManifest = proposal.manifest_text.includes(
-        "YIELD_TO_PARENT"
-      )
-        ? proposal.manifest_text
-        : `${proposal.manifest_text.trimEnd()}\nYIELD_TO_PARENT;\n`;
-
-      const header = {
-        startEpochInclusive: proposal.epoch_min,
-        endEpochExclusive: proposal.epoch_max,
-        intentDiscriminator: proposal.intent_discriminator,
-        minProposerTimestampInclusive: proposal.min_proposer_timestamp,
-        maxProposerTimestampExclusive: proposal.max_proposer_timestamp,
-      };
-      console.log("[SignButton] sending preauth request", { header });
-
-      // Send pre-authorization request to wallet with the server's exact epoch window,
-      // discriminator, and timestamp bounds — all fixed at proposal creation time so
-      // every signer produces the same subintent hash.
-      const result = await rdt.walletApi.sendPreAuthorizationRequest(
-        SubintentRequestBuilder()
-          .manifest(subintentManifest)
-          .header(header)
-          .setExpiration("atTime", proposal.max_proposer_timestamp)
-      );
-
-      console.log("[SignButton] preauth result", result);
-
-      if (result.isErr()) {
-        console.error("[SignButton] preauth error", result.error);
-        setError(
-          `Wallet error: ${result.error.error} — ${result.error.message ?? "Unknown error"}`
-        );
-        setSigning(false);
-        return;
-      }
-
-      const { signedPartialTransaction, subintentHash } = result.value;
-      console.log("[SignButton] got wallet response", {
-        subintentHash,
-        expectedHash: proposal.subintent_hash,
-      });
-
-      // Validate the wallet signed over the correct subintent
-      if (
-        proposal.subintent_hash &&
-        subintentHash &&
-        subintentHash !== proposal.subintent_hash
-      ) {
-        console.error("[SignButton] subintent hash mismatch", {
-          expected: proposal.subintent_hash,
-          got: subintentHash,
-        });
-        setError(
-          "Your wallet produced a different subintent hash than expected. " +
-            "It may not support custom subintent headers — please update " +
-            "your Radix Wallet to the latest version."
-        );
-        setSigning(false);
-        return;
-      }
-
-      // Send signed partial to backend
-      await signProposal({
-        proposalId: proposal.id,
-        signedPartialTransactionHex: signedPartialTransaction,
-      });
+      await handleSign(proposal);
     } catch (e) {
-      console.error("[SignButton] exception", e);
       setError(String(e));
     } finally {
       setSigning(false);
     }
-  }, [rdtResult, proposal, signProposal]);
-
-  if (!isConnected) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Connect your wallet to sign this proposal.
-      </p>
-    );
-  }
+  }, [handleSign, proposal]);
 
   return (
     <div className="space-y-2">
       <button
-        onClick={handleSign}
+        onClick={onSign}
         disabled={signing}
         className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -628,6 +535,218 @@ function ValidityWarning({ proposal }: { proposal: Proposal }) {
         </p>
       )}
     </section>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PreviewResult = { receipt: any; resource_changes: any[]; logs: any[] };
+
+function TransactionPreview({
+  manifestText,
+  previewAtom,
+}: {
+  manifestText: string;
+  previewAtom: ReturnType<typeof makePreviewTransactionAtom>;
+}) {
+  const runPreview = useAtomSet(previewAtom, { mode: "promise" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PreviewResult | null>(null);
+
+  const handlePreview = useCallback(async () => {
+    setError(null);
+    setResult(null);
+    setLoading(true);
+    try {
+      const res = await runPreview(manifestText);
+      setResult(res as PreviewResult);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [runPreview, manifestText]);
+
+  const receipt = result?.receipt;
+  const status: string | undefined = receipt?.status;
+  const isSuccess = status === "CommitSuccess" || status === "Succeeded";
+
+  return (
+    <section className="border border-border rounded-lg p-6 bg-card space-y-4">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+        Transaction Preview
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Simulate execution to estimate fees and check for errors before signing.
+      </p>
+
+      <button
+        onClick={handlePreview}
+        disabled={loading}
+        className="inline-flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/70 border border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading ? "Previewing..." : "Run Preview"}
+      </button>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+          <p className="font-medium">Preview failed</p>
+          <p className="text-xs mt-1 break-all">{error}</p>
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-4">
+          {/* Status */}
+          <div
+            className={`rounded-lg px-4 py-3 text-sm ${
+              isSuccess
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border border-red-500/20 text-red-400"
+            }`}
+          >
+            <p className="font-medium">
+              {isSuccess ? "Simulation Succeeded" : `Simulation: ${status}`}
+            </p>
+            {receipt?.error_message && (
+              <p className="text-xs mt-1">{receipt.error_message}</p>
+            )}
+          </div>
+
+          {/* Fee summary */}
+          {receipt?.fee_summary && (
+            <FeeSummary feeSummary={receipt.fee_summary} />
+          )}
+
+          {/* Resource changes */}
+          {result.resource_changes.length > 0 && (
+            <ResourceChanges changes={result.resource_changes} />
+          )}
+
+          {/* Logs */}
+          {result.logs.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Logs
+              </h3>
+              <div className="bg-muted border border-border rounded-lg p-3 text-xs font-mono space-y-1 max-h-48 overflow-y-auto">
+                {result.logs.map((log, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="text-muted-foreground shrink-0">
+                      [{log.level}]
+                    </span>
+                    <span className="break-all">{log.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function FeeSummary({ feeSummary }: { feeSummary: any }) {
+  const fields = [
+    ["Execution Cost (XRD)", feeSummary.xrd_total_execution_cost],
+    ["Finalization Cost (XRD)", feeSummary.xrd_total_finalization_cost],
+    ["Storage Cost (XRD)", feeSummary.xrd_total_storage_cost],
+    ["Royalty Cost (XRD)", feeSummary.xrd_total_royalty_cost],
+    ["Tipping Cost (XRD)", feeSummary.xrd_total_tipping_cost],
+  ].filter(([, v]) => v != null);
+
+  if (fields.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        Fee Estimate
+      </h3>
+      <div className="grid grid-cols-2 gap-2">
+        {fields.map(([label, value]) => (
+          <div
+            key={label}
+            className="border border-border rounded-lg p-2 bg-muted/50"
+          >
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-sm font-mono">{value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Truncate an address to first 12 and last 8 chars. */
+const shortAddr = (addr: string) =>
+  addr.length > 24 ? `${addr.slice(0, 12)}...${addr.slice(-8)}` : addr;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ResourceChanges({ changes }: { changes: any[] }) {
+  // Flatten nested resource_changes from each instruction index
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: { account: string; resource: string; amount: string }[] = [];
+  for (const entry of changes) {
+    for (const rc of entry.resource_changes ?? []) {
+      rows.push({
+        account: rc.component_entity?.entity_address ?? "unknown",
+        resource: rc.resource_address ?? "unknown",
+        amount: rc.amount ?? "0",
+      });
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        Resource Changes
+      </h3>
+      <div className="border border-border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/50 text-xs text-muted-foreground">
+              <th className="text-left px-3 py-2 font-medium">Account</th>
+              <th className="text-left px-3 py-2 font-medium">Resource</th>
+              <th className="text-right px-3 py-2 font-medium">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((row, i) => {
+              const isNegative = row.amount.startsWith("-");
+              return (
+                <tr key={i}>
+                  <td
+                    className="px-3 py-2 font-mono text-xs"
+                    title={row.account}
+                  >
+                    {shortAddr(row.account)}
+                  </td>
+                  <td
+                    className="px-3 py-2 font-mono text-xs"
+                    title={row.resource}
+                  >
+                    {row.resource.includes("xrd")
+                      ? "XRD"
+                      : shortAddr(row.resource)}
+                  </td>
+                  <td
+                    className={`px-3 py-2 font-mono text-xs text-right font-medium ${
+                      isNegative ? "text-red-400" : "text-emerald-400"
+                    }`}
+                  >
+                    {isNegative ? row.amount : `+${row.amount}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
