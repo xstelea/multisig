@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as CreateAccountRouteImport } from './routes/create-account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProposalsNewRouteImport } from './routes/proposals/new'
 import { Route as ProposalsIdRouteImport } from './routes/proposals/$id'
 
+const CreateAccountRoute = CreateAccountRouteImport.update({
+  id: '/create-account',
+  path: '/create-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,47 @@ const ProposalsIdRoute = ProposalsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/create-account': typeof CreateAccountRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/create-account': typeof CreateAccountRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/create-account': typeof CreateAccountRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/proposals/$id' | '/proposals/new'
+  fullPaths: '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/proposals/$id' | '/proposals/new'
-  id: '__root__' | '/' | '/proposals/$id' | '/proposals/new'
+  to: '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
+  id: '__root__' | '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CreateAccountRoute: typeof CreateAccountRoute
   ProposalsIdRoute: typeof ProposalsIdRoute
   ProposalsNewRoute: typeof ProposalsNewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/create-account': {
+      id: '/create-account'
+      path: '/create-account'
+      fullPath: '/create-account'
+      preLoaderRoute: typeof CreateAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CreateAccountRoute: CreateAccountRoute,
   ProposalsIdRoute: ProposalsIdRoute,
   ProposalsNewRoute: ProposalsNewRoute,
 }

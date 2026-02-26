@@ -23,12 +23,20 @@ function HomePage() {
             Manage proposals for multisig accounts.
           </p>
         </div>
-        <Link
-          to="/proposals/new"
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors"
-        >
-          New Proposal
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/create-account"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            Create Account
+          </Link>
+          <Link
+            to="/proposals/new"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors"
+          >
+            New Proposal
+          </Link>
+        </div>
       </div>
 
       <ClientOnly fallback={<ProposalListSkeleton />}>
