@@ -1,10 +1,17 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Result, useAtomSet, useAtomValue } from "@effect-atom/atom-react";
 import { createProposalAtom } from "@/atom/proposalAtoms";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta, hoursToEpochs } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BackLink } from "@/components/back-link";
 
 export const Route = createFileRoute("/proposals/new")({
   component: NewProposalPage,
@@ -14,12 +21,7 @@ function NewProposalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; Back to dashboard
-        </Link>
+        <BackLink />
         <h1 className="text-2xl font-semibold tracking-tight mt-2">
           Create Proposal
         </h1>
@@ -38,8 +40,8 @@ function NewProposalPage() {
 function FormSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-48 bg-muted rounded animate-pulse" />
-      <div className="h-10 w-32 bg-muted rounded animate-pulse" />
+      <Skeleton className="h-48 w-full" />
+      <Skeleton className="h-10 w-32" />
     </div>
   );
 }
@@ -122,16 +124,14 @@ function CreateProposalForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <label htmlFor="multisig-account" className="text-sm font-medium">
-          Multisig Account Address
-        </label>
-        <input
+        <Label htmlFor="multisig-account">Multisig Account Address</Label>
+        <Input
           id="multisig-account"
           type="text"
           value={multisigAccount}
           onChange={(e) => setMultisigAccount(e.target.value)}
           placeholder="account_tdx_2_..."
-          className="w-full px-4 py-2 rounded-lg bg-muted border border-border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted-foreground/50"
+          className="font-mono"
           disabled={submitting}
         />
         <p className="text-xs text-muted-foreground">
@@ -140,15 +140,13 @@ function CreateProposalForm() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="manifest" className="text-sm font-medium">
-          Transaction Manifest
-        </label>
-        <textarea
+        <Label htmlFor="manifest">Transaction Manifest</Label>
+        <Textarea
           id="manifest"
           value={manifestText}
           onChange={(e) => setManifestText(e.target.value)}
           placeholder={`CALL_METHOD\n    Address("account_tdx_2_...")\n    "withdraw"\n    ...\n;`}
-          className="w-full h-64 px-4 py-3 rounded-lg bg-muted border border-border font-mono text-sm resize-y placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-accent"
+          className="h-64 font-mono text-sm resize-y"
           disabled={submitting}
         />
         <p className="text-xs text-muted-foreground">
@@ -158,41 +156,35 @@ function CreateProposalForm() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Expiry</label>
+        <Label>Expiry</Label>
         <div className="flex gap-1">
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant={expiryMode === "hours" ? "accent" : "ghost"}
             onClick={() => setExpiryMode("hours")}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${
-              expiryMode === "hours"
-                ? "bg-accent text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
           >
             Hours
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
+            variant={expiryMode === "epoch" ? "accent" : "ghost"}
             onClick={() => setExpiryMode("epoch")}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${
-              expiryMode === "epoch"
-                ? "bg-accent text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
           >
             Exact Epoch
-          </button>
+          </Button>
         </div>
 
         {expiryMode === "hours" ? (
           <>
-            <input
+            <Input
               id="expiry-hours"
               type="number"
               value={expiryHours}
               onChange={(e) => setExpiryHours(e.target.value)}
               placeholder="e.g. 2, 24, 168"
-              className="w-48 px-4 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              className="w-48"
               disabled={submitting}
               min="0"
               step="any"
@@ -221,7 +213,7 @@ function CreateProposalForm() {
           </>
         ) : (
           <>
-            <input
+            <Input
               id="expiry-epoch"
               type="number"
               value={expiryEpoch}
@@ -231,7 +223,7 @@ function CreateProposalForm() {
                   ? `e.g. ${currentEpoch + 100}`
                   : "e.g. 50000"
               }
-              className="w-48 px-4 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              className="w-48"
               disabled={submitting}
             />
             <p className="text-xs text-muted-foreground">
@@ -268,18 +260,14 @@ function CreateProposalForm() {
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="inline-flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
+      <Button type="submit" variant="accent" disabled={submitting}>
         {submitting ? "Creating..." : "Create Proposal"}
-      </button>
+      </Button>
     </form>
   );
 }

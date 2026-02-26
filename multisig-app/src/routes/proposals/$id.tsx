@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Result, useAtomValue, useAtomSet } from "@effect-atom/atom-react";
 import {
   makeProposalDetailAtom,
@@ -12,6 +12,22 @@ import { formatEpochDelta } from "@/lib/epochTime";
 import { envVars, dashboardBaseUrl } from "@/lib/envVars";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useMemo, useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { SectionCard } from "@/components/section-card";
+import { StatusBadge } from "@/components/status-badge";
+import { BackLink } from "@/components/back-link";
 import type {
   Proposal,
   SignatureStatusType,
@@ -29,12 +45,7 @@ function ProposalDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; Back to dashboard
-        </Link>
+        <BackLink />
         <h1 className="text-2xl font-semibold tracking-tight mt-2">
           Proposal Detail
         </h1>
@@ -50,32 +61,10 @@ function ProposalDetailPage() {
 function DetailSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-8 w-48 bg-muted rounded animate-pulse" />
-      <div className="h-48 w-full bg-muted rounded animate-pulse" />
-      <div className="h-24 w-full bg-muted rounded animate-pulse" />
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-48 w-full" />
+      <Skeleton className="h-24 w-full" />
     </div>
-  );
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  created: "bg-blue-500/20 text-blue-400",
-  signing: "bg-yellow-500/20 text-yellow-400",
-  ready: "bg-green-500/20 text-green-400",
-  submitting: "bg-purple-500/20 text-purple-400",
-  committed: "bg-emerald-500/20 text-emerald-400",
-  failed: "bg-red-500/20 text-red-400",
-  expired: "bg-gray-500/20 text-gray-400",
-  invalid: "bg-red-500/20 text-red-400",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const colors = STATUS_COLORS[status] ?? "bg-gray-500/20 text-gray-400";
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors}`}
-    >
-      {status}
-    </span>
   );
 }
 
@@ -106,10 +95,10 @@ function ProposalDetail({ id }: { id: string }) {
       />
     ))
     .onFailure((error) => (
-      <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-        <p>Failed to load proposal.</p>
-        <p className="text-xs mt-1 text-muted-foreground">{String(error)}</p>
-      </div>
+      <Alert variant="destructive">
+        <AlertTitle>Failed to load proposal.</AlertTitle>
+        <AlertDescription>{String(error)}</AlertDescription>
+      </Alert>
     ))
     .render();
 }
@@ -177,7 +166,7 @@ function ProposalContent({
       <div className="grid grid-cols-2 gap-4">
         <MetadataField label="Created" value={created} />
         <MetadataField label="Epoch Window" value={epochWindowLabel} />
-        <div className="border border-border rounded-lg p-3 bg-card col-span-2">
+        <Card className="p-3 col-span-2">
           <p className="text-xs text-muted-foreground mb-1">Multisig Account</p>
           <a
             href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${proposal.multisig_account}`}
@@ -187,7 +176,7 @@ function ProposalContent({
           >
             {proposal.multisig_account}
           </a>
-        </div>
+        </Card>
         {proposal.subintent_hash && (
           <MetadataField
             label="Subintent Hash"
@@ -207,7 +196,7 @@ function ProposalContent({
       </div>
 
       {/* Signature progress */}
-      <SignatureProgress
+      <SignatureProgressSection
         sigStatusAtom={sigStatusAtom}
         canSign={canSign}
         proposal={proposal}
@@ -243,7 +232,7 @@ function ProposalContent({
   );
 }
 
-function SignatureProgress({
+function SignatureProgressSection({
   sigStatusAtom,
   canSign,
   proposal,
@@ -257,16 +246,12 @@ function SignatureProgress({
   const sigStatusResult = useAtomValue(sigStatusAtom);
 
   return (
-    <section className="border border-border rounded-lg p-6 bg-card space-y-4">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-        Signatures
-      </h2>
-
+    <SectionCard title="Signatures">
       {Result.builder(sigStatusResult)
         .onInitial(() => (
           <div className="space-y-2">
-            <div className="h-6 w-48 bg-muted rounded animate-pulse" />
-            <div className="h-4 w-full bg-muted rounded animate-pulse" />
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-full" />
           </div>
         ))
         .onSuccess((sigStatus) => (
@@ -283,7 +268,7 @@ function SignatureProgress({
           </p>
         ))
         .render()}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -298,6 +283,8 @@ function SignatureStatusDisplay({
   proposal: Proposal;
   handleSignAtom: ReturnType<typeof makeHandleSignAtom>;
 }) {
+  const pct = Math.min(100, (sigStatus.collected / sigStatus.threshold) * 100);
+
   return (
     <div className="space-y-4">
       {/* Progress bar */}
@@ -313,14 +300,7 @@ function SignatureStatusDisplay({
             </span>
           )}
         </div>
-        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-accent rounded-full transition-all"
-            style={{
-              width: `${Math.min(100, (sigStatus.collected / sigStatus.threshold) * 100)}%`,
-            }}
-          />
-        </div>
+        <Progress value={pct} />
       </div>
 
       {/* Signer list */}
@@ -402,13 +382,9 @@ function SignButton({
 
   return (
     <div className="space-y-2">
-      <button
-        onClick={onSign}
-        disabled={signing}
-        className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
+      <Button onClick={onSign} disabled={signing} variant="accent">
         {signing ? "Signing..." : "Sign Proposal"}
-      </button>
+      </Button>
       {error && <p className="text-sm text-red-400">{error}</p>}
     </div>
   );
@@ -442,49 +418,48 @@ function SubmitSection({
   }, [submitProposal, proposal.id]);
 
   return (
-    <section className="border border-border rounded-lg p-6 bg-card space-y-4">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-        Submit Transaction
-      </h2>
+    <SectionCard title="Submit Transaction">
       <p className="text-sm text-muted-foreground">
         All signatures collected. The server will pay the transaction fee and
         submit to the network.
       </p>
 
-      <div className="space-y-3">
-        <button
+      <div className="mt-4 space-y-3">
+        <Button
           onClick={handleSubmit}
           disabled={submitting}
-          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-green-600 text-white hover:bg-green-500"
         >
           {submitting ? "Submitting..." : "Submit"}
-        </button>
+        </Button>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         {result && (
-          <div
-            className={`rounded-lg px-4 py-3 text-sm ${
+          <Alert
+            className={
               result.status === "committed"
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                : "bg-red-500/10 border border-red-500/20 text-red-400"
-            }`}
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                : "border-red-500/20 bg-red-500/10 text-red-400"
+            }
           >
-            <p className="font-medium">
+            <AlertTitle>
               {result.status === "committed"
                 ? "Transaction committed!"
                 : `Transaction ${result.status}`}
-            </p>
-            {result.tx_id && (
-              <p className="mt-1 font-mono text-xs break-all">
-                TX: {result.tx_id}
-              </p>
-            )}
-            {result.error && <p className="mt-1 text-xs">{result.error}</p>}
-          </div>
+            </AlertTitle>
+            <AlertDescription>
+              {result.tx_id && (
+                <p className="font-mono text-xs break-all">
+                  TX: {result.tx_id}
+                </p>
+              )}
+              {result.error && <p className="text-xs">{result.error}</p>}
+            </AlertDescription>
+          </Alert>
         )}
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -492,36 +467,38 @@ function TransactionResult({ proposal }: { proposal: Proposal }) {
   const isCommitted = proposal.status === "committed";
 
   return (
-    <section
-      className={`border rounded-lg p-6 space-y-2 ${
+    <Alert
+      className={
         isCommitted
           ? "border-emerald-500/30 bg-emerald-500/5"
           : "border-red-500/30 bg-red-500/5"
-      }`}
+      }
     >
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+      <AlertTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
         Transaction Result
-      </h2>
-      <p
-        className={`text-sm font-medium ${isCommitted ? "text-emerald-400" : "text-red-400"}`}
-      >
-        {isCommitted ? "Committed on ledger" : "Transaction failed"}
-      </p>
-      {proposal.tx_id && (
-        <p className="font-mono text-xs text-muted-foreground break-all">
-          {proposal.tx_id}
+      </AlertTitle>
+      <AlertDescription>
+        <p
+          className={`text-sm font-medium ${isCommitted ? "text-emerald-400" : "text-red-400"}`}
+        >
+          {isCommitted ? "Committed on ledger" : "Transaction failed"}
         </p>
-      )}
-      {proposal.submitted_at && (
-        <p className="text-xs text-muted-foreground">
-          Submitted{" "}
-          {new Date(proposal.submitted_at).toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
-        </p>
-      )}
-    </section>
+        {proposal.tx_id && (
+          <p className="font-mono text-xs text-muted-foreground break-all mt-1">
+            {proposal.tx_id}
+          </p>
+        )}
+        {proposal.submitted_at && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Submitted{" "}
+            {new Date(proposal.submitted_at).toLocaleString("en-US", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </p>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -529,24 +506,20 @@ function ValidityWarning({ proposal }: { proposal: Proposal }) {
   const isExpired = proposal.status === "expired";
 
   return (
-    <section
-      className={`border rounded-lg p-4 ${
+    <Alert
+      className={
         isExpired
           ? "border-gray-500/30 bg-gray-500/5"
           : "border-red-500/30 bg-red-500/5"
-      }`}
+      }
     >
-      <p
-        className={`text-sm font-medium ${isExpired ? "text-gray-400" : "text-red-400"}`}
-      >
+      <AlertTitle className={isExpired ? "text-gray-400" : "text-red-400"}>
         {isExpired ? "Proposal Expired" : "Proposal Invalid"}
-      </p>
+      </AlertTitle>
       {proposal.invalid_reason && (
-        <p className="text-xs text-muted-foreground mt-1">
-          {proposal.invalid_reason}
-        </p>
+        <AlertDescription>{proposal.invalid_reason}</AlertDescription>
       )}
-    </section>
+    </Alert>
   );
 }
 
@@ -584,46 +557,41 @@ function TransactionPreview({
   const isSuccess = status === "CommitSuccess" || status === "Succeeded";
 
   return (
-    <section className="border border-border rounded-lg p-6 bg-card space-y-4">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-        Transaction Preview
-      </h2>
+    <SectionCard title="Transaction Preview">
       <p className="text-sm text-muted-foreground">
         Simulate execution to estimate fees and check for errors before signing.
       </p>
 
-      <button
-        onClick={handlePreview}
-        disabled={loading}
-        className="inline-flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/70 border border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {loading ? "Previewing..." : "Run Preview"}
-      </button>
+      <div className="mt-4">
+        <Button onClick={handlePreview} disabled={loading} variant="outline">
+          {loading ? "Previewing..." : "Run Preview"}
+        </Button>
+      </div>
 
       {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-          <p className="font-medium">Preview failed</p>
-          <p className="text-xs mt-1 break-all">{error}</p>
-        </div>
+        <Alert variant="destructive" className="mt-4">
+          <AlertTitle>Preview failed</AlertTitle>
+          <AlertDescription className="break-all">{error}</AlertDescription>
+        </Alert>
       )}
 
       {result && (
-        <div className="space-y-4">
+        <div className="mt-4 space-y-4">
           {/* Status */}
-          <div
-            className={`rounded-lg px-4 py-3 text-sm ${
+          <Alert
+            className={
               isSuccess
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                : "bg-red-500/10 border border-red-500/20 text-red-400"
-            }`}
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                : "border-red-500/20 bg-red-500/10 text-red-400"
+            }
           >
-            <p className="font-medium">
+            <AlertTitle>
               {isSuccess ? "Simulation Succeeded" : `Simulation: ${status}`}
-            </p>
+            </AlertTitle>
             {receipt?.error_message && (
-              <p className="text-xs mt-1">{receipt.error_message}</p>
+              <AlertDescription>{receipt.error_message}</AlertDescription>
             )}
-          </div>
+          </Alert>
 
           {/* Fee summary */}
           {receipt?.fee_summary && (
@@ -655,7 +623,7 @@ function TransactionPreview({
           )}
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -678,13 +646,10 @@ function FeeSummary({ feeSummary }: { feeSummary: any }) {
       </h3>
       <div className="grid grid-cols-2 gap-2">
         {fields.map(([label, value]) => (
-          <div
-            key={label}
-            className="border border-border rounded-lg p-2 bg-muted/50"
-          >
+          <Card key={label} className="p-3">
             <p className="text-xs text-muted-foreground">{label}</p>
             <p className="text-sm font-mono">{value}</p>
-          </div>
+          </Card>
         ))}
       </div>
     </div>
@@ -698,7 +663,6 @@ const shortAddr = (addr: string) =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ResourceChanges({ changes }: { changes: any[] }) {
   // Flatten nested resource_changes from each instruction index
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: { account: string; resource: string; amount: string }[] = [];
   for (const entry of changes) {
     for (const rc of entry.resource_changes ?? []) {
@@ -718,45 +682,39 @@ function ResourceChanges({ changes }: { changes: any[] }) {
         Resource Changes
       </h3>
       <div className="border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/50 text-xs text-muted-foreground">
-              <th className="text-left px-3 py-2 font-medium">Account</th>
-              <th className="text-left px-3 py-2 font-medium">Resource</th>
-              <th className="text-right px-3 py-2 font-medium">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50 text-xs text-muted-foreground">
+              <TableHead>Account</TableHead>
+              <TableHead>Resource</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((row, i) => {
               const isNegative = row.amount.startsWith("-");
               return (
-                <tr key={i}>
-                  <td
-                    className="px-3 py-2 font-mono text-xs"
-                    title={row.account}
-                  >
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-xs" title={row.account}>
                     {shortAddr(row.account)}
-                  </td>
-                  <td
-                    className="px-3 py-2 font-mono text-xs"
-                    title={row.resource}
-                  >
+                  </TableCell>
+                  <TableCell className="font-mono text-xs" title={row.resource}>
                     {row.resource.includes("xrd")
                       ? "XRD"
                       : shortAddr(row.resource)}
-                  </td>
-                  <td
-                    className={`px-3 py-2 font-mono text-xs text-right font-medium ${
+                  </TableCell>
+                  <TableCell
+                    className={`font-mono text-xs text-right font-medium ${
                       isNegative ? "text-red-400" : "text-emerald-400"
                     }`}
                   >
                     {isNegative ? row.amount : `+${row.amount}`}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -774,9 +732,9 @@ function MetadataField({
   className?: string;
 }) {
   return (
-    <div className={`border border-border rounded-lg p-3 bg-card ${className}`}>
+    <Card className={`p-3 ${className}`}>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className={`text-sm ${mono ? "font-mono break-all" : ""}`}>{value}</p>
-    </div>
+    </Card>
   );
 }
