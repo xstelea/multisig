@@ -5,6 +5,11 @@ import { proposalListAtom } from "@/atom/proposalAtoms";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
 import { formatEpochDelta } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { SectionCard } from "@/components/section-card";
+import { StatusBadge } from "@/components/status-badge";
 import type { Proposal } from "@/atom/orchestratorClient";
 
 export const Route = createFileRoute("/")({
@@ -24,18 +29,12 @@ function HomePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to="/create-account"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            Create Account
-          </Link>
-          <Link
-            to="/proposals/new"
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80 transition-colors"
-          >
-            New Proposal
-          </Link>
+          <Button asChild variant="outline">
+            <Link to="/create-account">Create Account</Link>
+          </Button>
+          <Button asChild variant="accent">
+            <Link to="/proposals/new">New Proposal</Link>
+          </Button>
         </div>
       </div>
 
@@ -55,37 +54,12 @@ function HomePageClient() {
 
 function ProposalListSkeleton() {
   return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-        Proposals
-      </h2>
+    <SectionCard title="Proposals">
       <div className="space-y-3">
-        <div className="h-12 w-full bg-muted rounded animate-pulse" />
-        <div className="h-12 w-full bg-muted rounded animate-pulse" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
       </div>
-    </section>
-  );
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  created: "bg-blue-500/20 text-blue-400",
-  signing: "bg-yellow-500/20 text-yellow-400",
-  ready: "bg-green-500/20 text-green-400",
-  submitting: "bg-purple-500/20 text-purple-400",
-  committed: "bg-emerald-500/20 text-emerald-400",
-  failed: "bg-red-500/20 text-red-400",
-  expired: "bg-gray-500/20 text-gray-400",
-  invalid: "bg-red-500/20 text-red-400",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const colors = STATUS_COLORS[status] ?? "bg-gray-500/20 text-gray-400";
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors}`}
-    >
-      {status}
-    </span>
+    </SectionCard>
   );
 }
 
@@ -99,15 +73,12 @@ function ProposalList() {
     .render();
 
   return (
-    <section className="border border-border rounded-lg p-6 bg-card">
-      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-        Proposals
-      </h2>
+    <SectionCard title="Proposals">
       {Result.builder(proposalsResult)
         .onInitial(() => (
           <div className="space-y-3">
-            <div className="h-12 w-full bg-muted rounded animate-pulse" />
-            <div className="h-12 w-full bg-muted rounded animate-pulse" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
           </div>
         ))
         .onSuccess((proposals) => {
@@ -137,15 +108,13 @@ function ProposalList() {
           );
         })
         .onFailure((error) => (
-          <div className="text-red-400 text-sm">
-            <p>Failed to load proposals.</p>
-            <p className="text-xs mt-1 text-muted-foreground">
-              {String(error)}
-            </p>
-          </div>
+          <Alert variant="destructive">
+            <AlertTitle>Failed to load proposals.</AlertTitle>
+            <AlertDescription>{String(error)}</AlertDescription>
+          </Alert>
         ))
         .render()}
-    </section>
+    </SectionCard>
   );
 }
 
