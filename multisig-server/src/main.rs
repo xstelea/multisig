@@ -43,13 +43,26 @@ struct HealthResponse {
     status: &'static str,
 }
 
+#[derive(serde::Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
+/// Shorthand for building a JSON error response tuple.
+fn err_response(
+    status: axum::http::StatusCode,
+    msg: String,
+) -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    (status, Json(ErrorResponse { error: msg }))
+}
+
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
 async fn access_rule(
     State(state): State<AppState>,
-) -> Result<Json<gateway::AccessRuleInfo>, (axum::http::StatusCode, String)> {
+) -> Result<Json<gateway::AccessRuleInfo>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     state
         .gateway
         .read_access_rule(&state.multisig_account)
@@ -57,7 +70,7 @@ async fn access_rule(
         .map(Json)
         .map_err(|e| {
             tracing::error!("Failed to read access rule: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to read access rule: {e}"),
             )
@@ -75,11 +88,11 @@ struct CreateProposalRequest {
 async fn create_proposal(
     State(state): State<AppState>,
     Json(req): Json<CreateProposalRequest>,
-) -> Result<Json<Proposal>, (axum::http::StatusCode, String)> {
+) -> Result<Json<Proposal>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // Get current epoch to set epoch_min
     let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
         tracing::error!("Failed to get current epoch: {e}");
-        (
+        err_response(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to get current epoch: {e}"),
         )
@@ -89,7 +102,7 @@ async fn create_proposal(
     let epoch_max = req.expiry_epoch;
 
     if epoch_max <= epoch_min {
-        return Err((
+        return Err(err_response(
             axum::http::StatusCode::BAD_REQUEST,
             format!("Expiry epoch ({epoch_max}) must be greater than current epoch ({epoch_min})"),
         ));
@@ -106,7 +119,7 @@ async fn create_proposal(
     )
     .map_err(|e| {
         tracing::error!("Failed to build subintent: {e}");
-        (
+        err_response(
             axum::http::StatusCode::BAD_REQUEST,
             format!("Failed to build subintent: {e}"),
         )
@@ -129,7 +142,7 @@ async fn create_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to create proposal: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create proposal: {e}"),
             )
@@ -140,10 +153,10 @@ async fn create_proposal(
 
 async fn list_proposals(
     State(state): State<AppState>,
-) -> Result<Json<Vec<Proposal>>, (axum::http::StatusCode, String)> {
+) -> Result<Json<Vec<Proposal>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     state.proposal_store.list().await.map(Json).map_err(|e| {
         tracing::error!("Failed to list proposals: {e}");
-        (
+        err_response(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to list proposals: {e}"),
         )
@@ -153,20 +166,20 @@ async fn list_proposals(
 async fn get_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<Proposal>, (axum::http::StatusCode, String)> {
+) -> Result<Json<Proposal>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let proposal = state
         .proposal_store
         .get(id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to get proposal: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get proposal: {e}"),
             )
         })?
         .ok_or_else(|| {
-            (
+            err_response(
                 axum::http::StatusCode::NOT_FOUND,
                 "Proposal not found".to_string(),
             )
@@ -186,7 +199,7 @@ async fn sign_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
     Json(req): Json<SignProposalRequest>,
-) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, String)> {
+) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // Fetch current access rule for validation
     let access_rule = state
         .gateway
@@ -194,11 +207,37 @@ async fn sign_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to read access rule: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to read access rule: {e}"),
             )
         })?;
+
+    // Fetch proposal to get its stored subintent hash
+    let proposal = state
+        .proposal_store
+        .get(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get proposal: {e}");
+            err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get proposal: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            err_response(
+                axum::http::StatusCode::NOT_FOUND,
+                "Proposal not found".to_string(),
+            )
+        })?;
+
+    let expected_hash = proposal.subintent_hash.ok_or_else(|| {
+        err_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Proposal has no subintent hash".to_string(),
+        )
+    })?;
 
     state
         .signature_collector
@@ -207,6 +246,8 @@ async fn sign_proposal(
             &req.signed_partial_transaction_hex,
             &access_rule,
             &state.proposal_store,
+            &expected_hash,
+            state.network_id,
         )
         .await
         .map(Json)
@@ -218,26 +259,27 @@ async fn sign_proposal(
             } else if msg.contains("not in the current access rule")
                 || msg.contains("already signed")
                 || msg.contains("status")
+                || msg.contains("different subintent hash")
             {
                 axum::http::StatusCode::BAD_REQUEST
             } else {
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             };
-            (status, msg)
+            err_response(status, msg)
         })
 }
 
 async fn get_signature_status(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, String)> {
+) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let access_rule = state
         .gateway
         .read_access_rule(&state.multisig_account)
         .await
         .map_err(|e| {
             tracing::error!("Failed to read access rule: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to read access rule: {e}"),
             )
@@ -250,7 +292,7 @@ async fn get_signature_status(
         .map(Json)
         .map_err(|e| {
             tracing::error!("Failed to get signature status: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get signature status: {e}"),
             )
@@ -269,7 +311,7 @@ struct SubmitProposalResponse {
 async fn submit_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
-) -> Result<Json<SubmitProposalResponse>, (axum::http::StatusCode, String)> {
+) -> Result<Json<SubmitProposalResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // Validate proposal is in Ready state
     let proposal = state
         .proposal_store
@@ -277,20 +319,20 @@ async fn submit_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to get proposal: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get proposal: {e}"),
             )
         })?
         .ok_or_else(|| {
-            (
+            err_response(
                 axum::http::StatusCode::NOT_FOUND,
                 "Proposal not found".to_string(),
             )
         })?;
 
     if proposal.status != ProposalStatus::Ready {
-        return Err((
+        return Err(err_response(
             axum::http::StatusCode::BAD_REQUEST,
             format!(
                 "Proposal is in {:?} status; must be Ready to submit",
@@ -303,7 +345,7 @@ async fn submit_proposal(
     let fee_payer_private_key =
         Ed25519PrivateKey::from_bytes(&state.fee_payer_key_bytes).map_err(|e| {
             tracing::error!("Failed to reconstruct fee payer key: {e:?}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 "Server fee payer key misconfigured".to_string(),
             )
@@ -318,7 +360,7 @@ async fn submit_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to get partial transaction bytes: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get partial transaction bytes: {e}"),
             )
@@ -330,7 +372,7 @@ async fn submit_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to get signatures: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get signatures: {e}"),
             )
@@ -348,7 +390,7 @@ async fn submit_proposal(
         transaction_builder::reconstruct_signed_partial(&partial_bytes, &stored_sigs).map_err(
             |e| {
                 tracing::error!("Failed to reconstruct signed partial: {e}");
-                (
+                err_response(
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                     format!("Failed to reconstruct signed partial: {e}"),
                 )
@@ -358,7 +400,7 @@ async fn submit_proposal(
     // Get current epoch for the main transaction
     let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
         tracing::error!("Failed to get current epoch: {e}");
-        (
+        err_response(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to get current epoch: {e}"),
         )
@@ -374,7 +416,7 @@ async fn submit_proposal(
     )
     .map_err(|e| {
         tracing::error!("Failed to compose main transaction: {e}");
-        (
+        err_response(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to compose main transaction: {e}"),
         )
@@ -387,7 +429,7 @@ async fn submit_proposal(
         .await
         .map_err(|e| {
             tracing::error!("Failed to transition to Submitting: {e}");
-            (
+            err_response(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to transition to Submitting: {e}"),
             )

@@ -9,6 +9,42 @@ use uuid::Uuid;
 use crate::gateway::{AccessRuleInfo, SignerInfo};
 use crate::proposal_store::{ProposalStatus, ProposalStore};
 
+/// Compute the bech32-encoded root subintent hash from a signed partial transaction hex.
+///
+/// Deserializes the wallet's signed partial, prepares it (which computes all
+/// internal hashes), and returns the root subintent hash in bech32 format
+/// (e.g. `subtxid_tdx_2_1...`). Used to verify the wallet signed over the
+/// same subintent the server expected.
+pub fn compute_subintent_hash_from_signed_partial_hex(
+    signed_partial_hex: &str,
+    network_id: u8,
+) -> Result<String> {
+    let bytes = hex::decode(signed_partial_hex).map_err(|e| anyhow!("Invalid hex: {e}"))?;
+
+    let raw = RawSignedPartialTransaction::from_vec(bytes);
+    let signed_partial = SignedPartialTransactionV2::from_raw(&raw)
+        .map_err(|e| anyhow!("Failed to decode signed partial transaction: {e:?}"))?;
+
+    let prepared = signed_partial
+        .prepare(PreparationSettings::latest_ref())
+        .map_err(|e| anyhow!("Failed to prepare signed partial transaction: {e:?}"))?;
+
+    let hash = prepared.subintent_hash();
+
+    let network = match network_id {
+        0x01 => NetworkDefinition::mainnet(),
+        0x02 => NetworkDefinition::stokenet(),
+        0xf2 => NetworkDefinition::simulator(),
+        _ => return Err(anyhow!("Unsupported network ID: {network_id}")),
+    };
+    let encoder = TransactionHashBech32Encoder::new(&network);
+    let encoded = encoder
+        .encode(&hash)
+        .map_err(|e| anyhow!("Failed to encode subintent hash: {e:?}"))?;
+
+    Ok(encoded)
+}
+
 /// A stored signature from a signer.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Signature {
@@ -133,9 +169,10 @@ impl SignatureCollector {
     /// Add a signature for a proposal. Returns the updated signature status.
     ///
     /// Validates:
-    /// 1. Signer is in the current access rule
-    /// 2. No duplicate signature from the same signer
-    /// 3. Proposal is in a valid state (Created or Signing)
+    /// 1. Wallet signed over the correct subintent (hash match)
+    /// 2. Signer is in the current access rule
+    /// 3. No duplicate signature from the same signer
+    /// 4. Proposal is in a valid state (Created or Signing)
     ///
     /// Transitions: Created→Signing on first sig, Signing→Ready when threshold met.
     pub async fn add_signature(
@@ -144,7 +181,21 @@ impl SignatureCollector {
         signed_partial_hex: &str,
         access_rule: &AccessRuleInfo,
         proposal_store: &ProposalStore,
+        expected_subintent_hash: &str,
+        network_id: u8,
     ) -> Result<SignatureStatus> {
+        // Validate the wallet signed over the correct subintent
+        let wallet_subintent_hash =
+            compute_subintent_hash_from_signed_partial_hex(signed_partial_hex, network_id)?;
+
+        if wallet_subintent_hash != expected_subintent_hash {
+            return Err(anyhow!(
+                "Wallet produced a different subintent hash (expected {expected_subintent_hash}, \
+                 got {wallet_subintent_hash}). Your wallet may not support custom subintent \
+                 headers — please update your Radix Wallet."
+            ));
+        }
+
         // Extract signature + public key from the wallet's response
         let (sig, public_key_hex) = extract_signature_from_hex(signed_partial_hex)?;
         let key_hash = compute_key_hash(&public_key_hex)?;
@@ -486,5 +537,99 @@ YIELD_TO_PARENT;
         let computed_hash = compute_key_hash(&pk_hex).unwrap();
 
         assert!(find_signer_by_hash(&access_rule, &computed_hash).is_none());
+    }
+
+    #[test]
+    fn compute_subintent_hash_from_signed_partial_matches_expected() {
+        let private_key = Ed25519PrivateKey::from_u64(1).unwrap();
+        let (hex_str, _) = build_test_signed_partial(&private_key);
+
+        let hash = compute_subintent_hash_from_signed_partial_hex(&hex_str, 0x02).unwrap();
+
+        // Should produce a bech32-encoded subintent hash
+        assert!(
+            hash.starts_with("subtxid_"),
+            "Subintent hash should be bech32-encoded, got: {hash}"
+        );
+    }
+
+    #[test]
+    fn compute_subintent_hash_deterministic() {
+        let private_key = Ed25519PrivateKey::from_u64(1).unwrap();
+        let (hex_str, _) = build_test_signed_partial(&private_key);
+
+        let a = compute_subintent_hash_from_signed_partial_hex(&hex_str, 0x02).unwrap();
+        let b = compute_subintent_hash_from_signed_partial_hex(&hex_str, 0x02).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn different_headers_produce_different_subintent_hashes() {
+        let private_key = Ed25519PrivateKey::from_u64(1).unwrap();
+
+        // Build two signed partials with different discriminators
+        let manifest_text = r#"CALL_METHOD
+    Address("account_tdx_2_1cx3u3xgr9anc9fk54dxzsz6k2n6lnadludkx4mx5re5erl8jt9lpnp")
+    "withdraw"
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Decimal("100")
+;
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc")
+    Bucket("xrd_bucket")
+;
+CALL_METHOD
+    Address("account_tdx_2_12xsvygvltz4uhsht6tdrfxktzpmnl77r0d40j8agmujgdj02el3l9v")
+    "deposit"
+    Bucket("xrd_bucket")
+;
+YIELD_TO_PARENT;
+"#;
+        let network = NetworkDefinition::stokenet();
+        let manifest: SubintentManifestV2 =
+            radix_transactions::manifest::compiler::compile_manifest(
+                manifest_text,
+                &network,
+                radix_transactions::manifest::BlobProvider::new(),
+            )
+            .unwrap();
+
+        // Discriminator 11111
+        let detailed_a = PartialTransactionV2Builder::new()
+            .intent_header(IntentHeaderV2 {
+                network_id: 0x02,
+                start_epoch_inclusive: Epoch::of(1000),
+                end_epoch_exclusive: Epoch::of(1100),
+                intent_discriminator: 11111,
+                min_proposer_timestamp_inclusive: None,
+                max_proposer_timestamp_exclusive: None,
+            })
+            .manifest(manifest.clone())
+            .sign(&private_key)
+            .build();
+        let hex_a = hex::encode(detailed_a.partial_transaction.to_raw().unwrap().as_slice());
+
+        // Discriminator 22222
+        let detailed_b = PartialTransactionV2Builder::new()
+            .intent_header(IntentHeaderV2 {
+                network_id: 0x02,
+                start_epoch_inclusive: Epoch::of(1000),
+                end_epoch_exclusive: Epoch::of(1100),
+                intent_discriminator: 22222,
+                min_proposer_timestamp_inclusive: None,
+                max_proposer_timestamp_exclusive: None,
+            })
+            .manifest(manifest)
+            .sign(&private_key)
+            .build();
+        let hex_b = hex::encode(detailed_b.partial_transaction.to_raw().unwrap().as_slice());
+
+        let hash_a = compute_subintent_hash_from_signed_partial_hex(&hex_a, 0x02).unwrap();
+        let hash_b = compute_subintent_hash_from_signed_partial_hex(&hex_b, 0x02).unwrap();
+
+        assert_ne!(
+            hash_a, hash_b,
+            "Different discriminators should produce different subintent hashes"
+        );
     }
 }

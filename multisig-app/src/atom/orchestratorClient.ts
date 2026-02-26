@@ -2,9 +2,34 @@ import { Context, Effect, Layer, Schema } from "effect";
 import {
   FetchHttpClient,
   HttpClient,
+  HttpClientError,
   HttpClientRequest,
 } from "@effect/platform";
 import { envVars } from "@/lib/envVars";
+
+const ServerErrorBody = Schema.Struct({ error: Schema.String });
+
+/**
+ * Extract a human-readable error message from an Effect HTTP error.
+ * For ResponseErrors (non-2xx), parses the JSON body as `{ error: string }`
+ * using an Effect Schema, falling back to raw text, then to String(e).
+ */
+const extractErrorMessage = (e: unknown): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    if (HttpClientError.isHttpClientError(e) && e._tag === "ResponseError") {
+      const parsed = yield* e.response.json.pipe(
+        Effect.flatMap(Schema.decodeUnknown(ServerErrorBody)),
+        Effect.catchAll(() => Effect.succeed(undefined))
+      );
+      if (parsed) return parsed.error;
+
+      const text = yield* e.response.text.pipe(
+        Effect.catchAll(() => Effect.succeed(undefined))
+      );
+      if (text) return text;
+    }
+    return String(e);
+  });
 
 // --- Response schemas ---
 
@@ -114,7 +139,11 @@ const OrchestratorClientLive = Layer.effect(
             Schema.decodeUnknown(Schema.Struct({ status: Schema.String }))
           ),
           Effect.scoped,
-          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+          Effect.catchAll((e) =>
+            extractErrorMessage(e).pipe(
+              Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+            )
+          )
         ),
 
       getAccessRule: () =>
@@ -124,7 +153,11 @@ const OrchestratorClientLive = Layer.effect(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(AccessRuleInfoSchema)),
             Effect.scoped,
-            Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+            Effect.catchAll((e) =>
+              extractErrorMessage(e).pipe(
+                Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+              )
+            )
           ),
 
       createProposal: (input: {
@@ -137,7 +170,11 @@ const OrchestratorClientLive = Layer.effect(
           Effect.flatMap((res) => res.json),
           Effect.flatMap(Schema.decodeUnknown(ProposalSchema)),
           Effect.scoped,
-          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+          Effect.catchAll((e) =>
+            extractErrorMessage(e).pipe(
+              Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+            )
+          )
         ),
 
       listProposals: () =>
@@ -145,7 +182,11 @@ const OrchestratorClientLive = Layer.effect(
           Effect.flatMap((res) => res.json),
           Effect.flatMap(Schema.decodeUnknown(Schema.Array(ProposalSchema))),
           Effect.scoped,
-          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+          Effect.catchAll((e) =>
+            extractErrorMessage(e).pipe(
+              Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+            )
+          )
         ),
 
       getProposal: (id: string) =>
@@ -155,7 +196,11 @@ const OrchestratorClientLive = Layer.effect(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(ProposalSchema)),
             Effect.scoped,
-            Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+            Effect.catchAll((e) =>
+              extractErrorMessage(e).pipe(
+                Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+              )
+            )
           ),
 
       signProposal: (id: string, signedPartialTransactionHex: string) =>
@@ -167,7 +212,11 @@ const OrchestratorClientLive = Layer.effect(
           Effect.flatMap((res) => res.json),
           Effect.flatMap(Schema.decodeUnknown(SignatureStatusSchema)),
           Effect.scoped,
-          Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+          Effect.catchAll((e) =>
+            extractErrorMessage(e).pipe(
+              Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+            )
+          )
         ),
 
       getSignatureStatus: (id: string) =>
@@ -179,7 +228,11 @@ const OrchestratorClientLive = Layer.effect(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(SignatureStatusSchema)),
             Effect.scoped,
-            Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+            Effect.catchAll((e) =>
+              extractErrorMessage(e).pipe(
+                Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+              )
+            )
           ),
 
       submitProposal: (id: string) =>
@@ -189,7 +242,11 @@ const OrchestratorClientLive = Layer.effect(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(SubmitProposalResponseSchema)),
             Effect.scoped,
-            Effect.catchAll((e) => Effect.fail(new Error(String(e))))
+            Effect.catchAll((e) =>
+              extractErrorMessage(e).pipe(
+                Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+              )
+            )
           ),
     };
   })
