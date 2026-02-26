@@ -421,7 +421,7 @@ function SignButton({
         SubintentRequestBuilder()
           .manifest(subintentManifest)
           .header(header)
-          .setExpiration("afterDelay", 3600)
+          .setExpiration("atTime", proposal.max_proposer_timestamp)
       );
 
       console.log("[SignButton] preauth result", result);
@@ -435,10 +435,30 @@ function SignButton({
         return;
       }
 
-      const { signedPartialTransaction } = result.value;
-      console.log(
-        "[SignButton] got signedPartialTransaction, sending to backend"
-      );
+      const { signedPartialTransaction, subintentHash } = result.value;
+      console.log("[SignButton] got wallet response", {
+        subintentHash,
+        expectedHash: proposal.subintent_hash,
+      });
+
+      // Validate the wallet signed over the correct subintent
+      if (
+        proposal.subintent_hash &&
+        subintentHash &&
+        subintentHash !== proposal.subintent_hash
+      ) {
+        console.error("[SignButton] subintent hash mismatch", {
+          expected: proposal.subintent_hash,
+          got: subintentHash,
+        });
+        setError(
+          "Your wallet produced a different subintent hash than expected. " +
+            "It may not support custom subintent headers — please update " +
+            "your Radix Wallet to the latest version."
+        );
+        setSigning(false);
+        return;
+      }
 
       // Send signed partial to backend
       await signProposal({

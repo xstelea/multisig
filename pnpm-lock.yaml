@@ -36,8 +36,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0
       '@radixdlt/radix-dapp-toolkit':
-        specifier: 2.3.0-subintent-header.1
-        version: 2.3.0-subintent-header.1(typescript@5.9.3)
+        specifier: 2.3.0-subintent-header.3
+        version: 2.3.0-subintent-header.3(typescript@5.9.3)
       '@tailwindcss/vite':
         specifier: ^4.0.6
         version: 4.2.1(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -962,8 +962,8 @@ packages:
   '@radixdlt/babylon-gateway-api-sdk@1.10.1':
     resolution: {integrity: sha512-l/Pt1qaxi2I99ykl9oS4pO+AzBmpMY6oqMOBq0ABbpg7YqqaugZU3OUP/tI0SQsIR1QvXYGdxlsS+HnhioeHlA==}
 
-  '@radixdlt/radix-dapp-toolkit@2.3.0-subintent-header.1':
-    resolution: {integrity: sha512-GxHurOKFO0+Dkvbht78lLl2QnWcWHl3JXjXLyP9tyFVGQfi+AittG+kJUgtdRiNmpj86UctCma9/FRo9sTE4Ag==}
+  '@radixdlt/radix-dapp-toolkit@2.3.0-subintent-header.3':
+    resolution: {integrity: sha512-NB4ozIaVBkTKxfH3Vc/aOIZoAU3CIKFWG/U6IdSqQtJs5lJz19/KSXD803w6atOBIylM8+KEbTqwnuxhrd8hjw==}
     engines: {node: '>=18'}
 
   '@radixdlt/radix-engine-toolkit@1.0.6':
@@ -2990,7 +2990,7 @@ snapshots:
 
   '@radixdlt/babylon-gateway-api-sdk@1.10.1': {}
 
-  '@radixdlt/radix-dapp-toolkit@2.3.0-subintent-header.1(typescript@5.9.3)':
+  '@radixdlt/radix-dapp-toolkit@2.3.0-subintent-header.3(typescript@5.9.3)':
     dependencies:
       '@noble/curves': 1.9.7
       base64url: 3.0.1
