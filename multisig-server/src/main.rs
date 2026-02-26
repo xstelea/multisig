@@ -30,7 +30,6 @@ pub struct AppState {
     pub proposal_store: Arc<ProposalStore>,
     pub signature_collector: Arc<SignatureCollector>,
     pub gateway: Arc<GatewayClient>,
-    pub multisig_account: String,
     pub network_id: u8,
     /// Raw bytes of the server's fee-payer Ed25519 private key.
     pub fee_payer_key_bytes: [u8; 32],
@@ -60,35 +59,26 @@ async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-async fn access_rule(
-    State(state): State<AppState>,
-) -> Result<Json<gateway::AccessRuleInfo>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    state
-        .gateway
-        .read_access_rule(&state.multisig_account)
-        .await
-        .map(Json)
-        .map_err(|e| {
-            tracing::error!("Failed to read access rule: {e}");
-            err_response(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to read access rule: {e}"),
-            )
-        })
-}
-
 // --- Proposal endpoints ---
 
 #[derive(serde::Deserialize)]
 struct CreateProposalRequest {
     manifest_text: String,
     expiry_epoch: u64,
+    multisig_account: String,
 }
 
 async fn create_proposal(
     State(state): State<AppState>,
     Json(req): Json<CreateProposalRequest>,
 ) -> Result<Json<Proposal>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    if req.multisig_account.trim().is_empty() {
+        return Err(err_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            "multisig_account is required".to_string(),
+        ));
+    }
+
     // Get current epoch to set epoch_min
     let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
         tracing::error!("Failed to get current epoch: {e}");
@@ -130,7 +120,7 @@ async fn create_proposal(
         .proposal_store
         .create(CreateProposal {
             manifest_text: req.manifest_text,
-            treasury_account: None,
+            multisig_account: req.multisig_account,
             epoch_min: epoch_min as i64,
             epoch_max: epoch_max as i64,
             subintent_hash: subintent_result.subintent_hash,
@@ -200,20 +190,7 @@ async fn sign_proposal(
     Path(id): Path<uuid::Uuid>,
     Json(req): Json<SignProposalRequest>,
 ) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    // Fetch current access rule for validation
-    let access_rule = state
-        .gateway
-        .read_access_rule(&state.multisig_account)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to read access rule: {e}");
-            err_response(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to read access rule: {e}"),
-            )
-        })?;
-
-    // Fetch proposal to get its stored subintent hash
+    // Fetch proposal first to get its multisig account and subintent hash
     let proposal = state
         .proposal_store
         .get(id)
@@ -229,6 +206,19 @@ async fn sign_proposal(
             err_response(
                 axum::http::StatusCode::NOT_FOUND,
                 "Proposal not found".to_string(),
+            )
+        })?;
+
+    // Fetch current access rule for validation using proposal's multisig account
+    let access_rule = state
+        .gateway
+        .read_access_rule(&proposal.multisig_account)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read access rule: {e}");
+            err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read access rule: {e}"),
             )
         })?;
 
@@ -273,9 +263,27 @@ async fn get_signature_status(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
 ) -> Result<Json<SignatureStatus>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let proposal = state
+        .proposal_store
+        .get(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get proposal: {e}");
+            err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get proposal: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            err_response(
+                axum::http::StatusCode::NOT_FOUND,
+                "Proposal not found".to_string(),
+            )
+        })?;
+
     let access_rule = state
         .gateway
-        .read_access_rule(&state.multisig_account)
+        .read_access_rule(&proposal.multisig_account)
         .await
         .map_err(|e| {
             tracing::error!("Failed to read access rule: {e}");
@@ -533,8 +541,6 @@ async fn main() -> anyhow::Result<()> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let gateway_url = std::env::var("GATEWAY_URL")
         .unwrap_or_else(|_| "https://babylon-stokenet-gateway.radixdlt.com".into());
-    let multisig_account =
-        std::env::var("MULTISIG_ACCOUNT_ADDRESS").expect("MULTISIG_ACCOUNT_ADDRESS must be set");
     let frontend_origin =
         std::env::var("FRONTEND_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".into());
     let network_id: u8 = std::env::var("NETWORK_ID")
@@ -587,7 +593,6 @@ async fn main() -> anyhow::Result<()> {
         proposal_store,
         signature_collector,
         gateway,
-        multisig_account,
         network_id,
         fee_payer_key_bytes,
         fee_payer_account,
@@ -597,7 +602,6 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(validity_monitor::run(
         state.proposal_store.clone(),
         state.gateway.clone(),
-        state.multisig_account.clone(),
         monitor_interval_secs,
     ));
     tracing::info!("Validity monitor started (interval: {monitor_interval_secs}s)");
@@ -613,7 +617,6 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/account/access-rule", get(access_rule))
         .route("/proposals", post(create_proposal).get(list_proposals))
         .route("/proposals/{id}", get(get_proposal))
         .route("/proposals/{id}/sign", post(sign_proposal))

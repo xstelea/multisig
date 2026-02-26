@@ -2,11 +2,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Result, useAtomSet, useAtomValue } from "@effect-atom/atom-react";
 import { createProposalAtom } from "@/atom/proposalAtoms";
 import { epochDurationAtom } from "@/atom/gatewayAtoms";
-import { envVars, dashboardBaseUrl } from "@/lib/envVars";
 import { formatEpochDelta, hoursToEpochs } from "@/lib/epochTime";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useState } from "react";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/proposals/new")({
   component: NewProposalPage,
@@ -28,43 +26,6 @@ function NewProposalPage() {
         <p className="text-muted-foreground mt-1">
           Paste a raw transaction manifest and set an expiry epoch.
         </p>
-        <p className="text-xs text-muted-foreground font-mono flex items-start gap-2 mt-2">
-          <span>
-            Multisig account:{" "}
-            <a
-              href={`${dashboardBaseUrl(envVars.NETWORK_ID)}/account/${envVars.MULTISIG_ACCOUNT_ADDRESS}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-accent transition-colors break-all"
-            >
-              {envVars.MULTISIG_ACCOUNT_ADDRESS}
-            </a>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(envVars.MULTISIG_ACCOUNT_ADDRESS);
-              toast.success("Address copied");
-            }}
-            className="shrink-0 p-0.5 hover:text-accent transition-colors"
-            title="Copy address"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          </button>
-        </p>
       </div>
 
       <ClientOnly fallback={<FormSkeleton />}>
@@ -85,6 +46,7 @@ function FormSkeleton() {
 
 function CreateProposalForm() {
   const navigate = useNavigate();
+  const [multisigAccount, setMultisigAccount] = useState("");
   const [manifestText, setManifestText] = useState("");
   const [expiryMode, setExpiryMode] = useState<"hours" | "epoch">("hours");
   const [expiryHours, setExpiryHours] = useState("");
@@ -105,6 +67,11 @@ function CreateProposalForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!multisigAccount.trim()) {
+      setError("Multisig account address is required");
+      return;
+    }
 
     if (!manifestText.trim()) {
       setError("Manifest text is required");
@@ -142,6 +109,7 @@ function CreateProposalForm() {
       const proposal = await createProposal({
         manifest_text: manifestText,
         expiry_epoch: epoch,
+        multisig_account: multisigAccount.trim(),
       });
       navigate({ to: "/proposals/$id", params: { id: proposal.id } });
     } catch (err) {
@@ -153,6 +121,24 @@ function CreateProposalForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-2">
+        <label htmlFor="multisig-account" className="text-sm font-medium">
+          Multisig Account Address
+        </label>
+        <input
+          id="multisig-account"
+          type="text"
+          value={multisigAccount}
+          onChange={(e) => setMultisigAccount(e.target.value)}
+          placeholder="account_tdx_2_..."
+          className="w-full px-4 py-2 rounded-lg bg-muted border border-border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent placeholder:text-muted-foreground/50"
+          disabled={submitting}
+        />
+        <p className="text-xs text-muted-foreground">
+          The multisig account that this proposal will execute against.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <label htmlFor="manifest" className="text-sm font-medium">
           Transaction Manifest

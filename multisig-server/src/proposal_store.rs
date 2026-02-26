@@ -42,7 +42,7 @@ impl ProposalStatus {
 pub struct Proposal {
     pub id: Uuid,
     pub manifest_text: String,
-    pub treasury_account: Option<String>,
+    pub multisig_account: String,
     pub epoch_min: i64,
     pub epoch_max: i64,
     pub status: ProposalStatus,
@@ -58,7 +58,7 @@ pub struct Proposal {
 
 pub struct CreateProposal {
     pub manifest_text: String,
-    pub treasury_account: Option<String>,
+    pub multisig_account: String,
     pub epoch_min: i64,
     pub epoch_max: i64,
     pub subintent_hash: String,
@@ -80,15 +80,15 @@ impl ProposalStore {
     pub async fn create(&self, input: CreateProposal) -> Result<Proposal> {
         let row = sqlx::query_as::<_, Proposal>(
             r#"
-            INSERT INTO proposals (manifest_text, treasury_account, epoch_min, epoch_max, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp, partial_transaction_bytes)
+            INSERT INTO proposals (manifest_text, multisig_account, epoch_min, epoch_max, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp, partial_transaction_bytes)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id, manifest_text, treasury_account, epoch_min, epoch_max,
+            RETURNING id, manifest_text, multisig_account, epoch_min, epoch_max,
                       status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
                       created_at, submitted_at, tx_id, invalid_reason
             "#,
         )
         .bind(&input.manifest_text)
-        .bind(&input.treasury_account)
+        .bind(&input.multisig_account)
         .bind(input.epoch_min)
         .bind(input.epoch_max)
         .bind(&input.subintent_hash)
@@ -105,7 +105,7 @@ impl ProposalStore {
     pub async fn get(&self, id: Uuid) -> Result<Option<Proposal>> {
         let row = sqlx::query_as::<_, Proposal>(
             r#"
-            SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
+            SELECT id, manifest_text, multisig_account, epoch_min, epoch_max,
                    status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
                    created_at, submitted_at, tx_id, invalid_reason
             FROM proposals
@@ -122,7 +122,7 @@ impl ProposalStore {
     pub async fn list(&self) -> Result<Vec<Proposal>> {
         let rows = sqlx::query_as::<_, Proposal>(
             r#"
-            SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
+            SELECT id, manifest_text, multisig_account, epoch_min, epoch_max,
                    status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
                    created_at, submitted_at, tx_id, invalid_reason
             FROM proposals
@@ -193,7 +193,7 @@ impl ProposalStore {
     pub async fn list_active(&self) -> Result<Vec<Proposal>> {
         let rows = sqlx::query_as::<_, Proposal>(
             r#"
-            SELECT id, manifest_text, treasury_account, epoch_min, epoch_max,
+            SELECT id, manifest_text, multisig_account, epoch_min, epoch_max,
                    status, subintent_hash, intent_discriminator, min_proposer_timestamp, max_proposer_timestamp,
                    created_at, submitted_at, tx_id, invalid_reason
             FROM proposals

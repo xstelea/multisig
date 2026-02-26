@@ -9,7 +9,6 @@ use crate::proposal_store::{ProposalStatus, ProposalStore};
 pub async fn run(
     proposal_store: Arc<ProposalStore>,
     gateway: Arc<GatewayClient>,
-    multisig_account: String,
     interval_secs: u64,
 ) {
     let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
@@ -18,7 +17,7 @@ pub async fn run(
 
     loop {
         interval.tick().await;
-        if let Err(e) = check_proposals(&proposal_store, &gateway, &multisig_account).await {
+        if let Err(e) = check_proposals(&proposal_store, &gateway).await {
             tracing::error!("Validity monitor error: {e}");
         }
     }
@@ -28,7 +27,6 @@ pub async fn run(
 pub async fn check_proposals(
     proposal_store: &ProposalStore,
     gateway: &GatewayClient,
-    multisig_account: &str,
 ) -> anyhow::Result<()> {
     let proposals = proposal_store.list_active().await?;
     if proposals.is_empty() {
@@ -55,68 +53,91 @@ pub async fn check_proposals(
         }
     }
 
-    // Phase 2: Check access rule changes for proposals that have signatures
-    if still_active
+    // Phase 2: Check access rule changes for proposals that have signatures.
+    // Group by multisig_account to avoid redundant gateway calls.
+    let signing_or_ready: Vec<_> = still_active
         .iter()
-        .any(|p| p.status == ProposalStatus::Signing || p.status == ProposalStatus::Ready)
-    {
-        let access_rule = gateway.read_access_rule(multisig_account).await?;
+        .filter(|p| p.status == ProposalStatus::Signing || p.status == ProposalStatus::Ready)
+        .collect();
+
+    if signing_or_ready.is_empty() {
+        return Ok(());
+    }
+
+    // Collect unique multisig accounts
+    let unique_accounts: std::collections::HashSet<&str> = signing_or_ready
+        .iter()
+        .map(|p| p.multisig_account.as_str())
+        .collect();
+
+    // Fetch access rules per unique account
+    let mut access_rules: std::collections::HashMap<&str, crate::gateway::AccessRuleInfo> =
+        std::collections::HashMap::new();
+    for account in &unique_accounts {
+        match gateway.read_access_rule(account).await {
+            Ok(rule) => {
+                access_rules.insert(account, rule);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read access rule for {account}: {e}");
+            }
+        }
+    }
+
+    for proposal in &signing_or_ready {
+        let access_rule = match access_rules.get(proposal.multisig_account.as_str()) {
+            Some(rule) => rule,
+            None => continue, // Already logged above
+        };
+
         let current_hashes: std::collections::HashSet<&str> = access_rule
             .signers
             .iter()
             .map(|s| s.key_hash.as_str())
             .collect();
 
-        for proposal in &still_active {
-            if proposal.status != ProposalStatus::Signing
-                && proposal.status != ProposalStatus::Ready
-            {
-                continue;
-            }
+        // Get signature key hashes for this proposal
+        let sig_hashes = proposal_store
+            .get_signature_key_hashes(proposal.id)
+            .await
+            .unwrap_or_default();
 
-            // Get signature key hashes for this proposal
-            let sig_hashes = proposal_store
-                .get_signature_key_hashes(proposal.id)
-                .await
-                .unwrap_or_default();
-
-            let mut removed_signers = Vec::new();
-            for (key_hash, is_valid) in &sig_hashes {
-                if *is_valid && !current_hashes.contains(key_hash.as_str()) {
-                    // Signer was removed from access rule — invalidate their signature
-                    if let Err(e) = proposal_store
-                        .invalidate_signature(proposal.id, key_hash)
-                        .await
-                    {
-                        tracing::warn!(
-                            "Failed to invalidate signature for {key_hash} on proposal {}: {e}",
-                            proposal.id
-                        );
-                    }
-                    removed_signers.push(key_hash.clone());
-                }
-            }
-
-            if !removed_signers.is_empty() {
-                // Recount valid signatures
-                let valid_count = proposal_store
-                    .count_valid_signatures(proposal.id)
+        let mut removed_signers = Vec::new();
+        for (key_hash, is_valid) in &sig_hashes {
+            if *is_valid && !current_hashes.contains(key_hash.as_str()) {
+                // Signer was removed from access rule — invalidate their signature
+                if let Err(e) = proposal_store
+                    .invalidate_signature(proposal.id, key_hash)
                     .await
-                    .unwrap_or(0);
-
-                if valid_count < access_rule.threshold as i64 {
-                    let reason = format!(
-                        "Access rule changed — signer(s) removed: {}",
-                        removed_signers
-                            .iter()
-                            .map(|h| format!("{}...{}", &h[..8], &h[h.len() - 6..]))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                {
+                    tracing::warn!(
+                        "Failed to invalidate signature for {key_hash} on proposal {}: {e}",
+                        proposal.id
                     );
-                    tracing::info!("Proposal {} invalidated: {reason}", proposal.id);
-                    if let Err(e) = proposal_store.mark_invalid(proposal.id, &reason).await {
-                        tracing::warn!("Failed to mark proposal {} as invalid: {e}", proposal.id);
-                    }
+                }
+                removed_signers.push(key_hash.clone());
+            }
+        }
+
+        if !removed_signers.is_empty() {
+            // Recount valid signatures
+            let valid_count = proposal_store
+                .count_valid_signatures(proposal.id)
+                .await
+                .unwrap_or(0);
+
+            if valid_count < access_rule.threshold as i64 {
+                let reason = format!(
+                    "Access rule changed — signer(s) removed: {}",
+                    removed_signers
+                        .iter()
+                        .map(|h| format!("{}...{}", &h[..8], &h[h.len() - 6..]))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                tracing::info!("Proposal {} invalidated: {reason}", proposal.id);
+                if let Err(e) = proposal_store.mark_invalid(proposal.id, &reason).await {
+                    tracing::warn!("Failed to mark proposal {} as invalid: {e}", proposal.id);
                 }
             }
         }
