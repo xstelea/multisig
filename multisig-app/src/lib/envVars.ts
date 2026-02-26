@@ -14,6 +14,11 @@ export const dashboardBaseUrl = (networkId: number) =>
     ? "https://stokenet-dashboard.radixdlt.com"
     : "https://dashboard.radixdlt.com";
 
+export const gatewayBaseUrl = (networkId: number) =>
+  networkId === 2
+    ? "https://stokenet.radixdlt.com"
+    : "https://mainnet.radixdlt.com";
+
 export const envVars = pipe(
   {
     NETWORK_ID: import.meta.env.VITE_PUBLIC_NETWORK_ID as unknown,
