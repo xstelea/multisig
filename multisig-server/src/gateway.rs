@@ -1,8 +1,9 @@
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Information about a signer extracted from the access rule.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub struct SignerInfo {
     /// Hash of the signer's public key (from NonFungibleGlobalId local_id).
     pub key_hash: String,
@@ -15,7 +16,7 @@ pub struct SignerInfo {
 }
 
 /// Parsed access rule: signers and threshold.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub struct AccessRuleInfo {
     pub signers: Vec<SignerInfo>,
     pub threshold: u8,
