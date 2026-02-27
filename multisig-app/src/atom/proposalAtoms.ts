@@ -19,6 +19,7 @@ export const createProposalAtom = runtime.fn(
     input: {
       manifest_text: string;
       expiry_epoch: number;
+      multisig_account?: string;
     },
     get
   ) =>
@@ -28,6 +29,13 @@ export const createProposalAtom = runtime.fn(
       get.refresh(proposalListAtom);
       return proposal;
     })
+);
+
+export const getAccessRuleAtom = runtime.fn((address: string) =>
+  Effect.gen(function* () {
+    const client = yield* OrchestratorClient;
+    return yield* client.getAccessRule(address);
+  })
 );
 
 export const makeProposalDetailAtom = (id: string) =>

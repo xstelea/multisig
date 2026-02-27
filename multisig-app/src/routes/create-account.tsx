@@ -85,7 +85,7 @@ function CreateAccountForm() {
   useAtomMount(dappToolkitAtom);
   const rdtResult = useAtomValue(dappToolkitAtom);
 
-  const [signers, setSigners] = useState<string[]>([""]);
+  const [signers, setSigners] = useState<string[]>(["", ""]);
   const [thresholdInput, setThresholdInput] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -129,12 +129,15 @@ function CreateAccountForm() {
   // Build manifest preview when all signers are valid and threshold is valid
   const thresholdValid = Either.isRight(thresholdDecoded);
   const manifestPreview = useMemo(() => {
+    const validSigners = parsed.filter(
+      (p): p is ParsedSigner => p !== null && !("error" in p)
+    );
     if (!allValid || validSigners.length === 0 || !thresholdValid) return null;
     return buildCreateAccountManifest({
       signers: validSigners,
       threshold: effectiveThreshold,
     });
-  }, [allValid, validSigners, effectiveThreshold, thresholdValid]);
+  }, [allValid, parsed, effectiveThreshold, thresholdValid]);
 
   const addSigner = () => setSigners((prev) => [...prev, ""]);
   const removeSigner = (index: number) => {
@@ -244,7 +247,7 @@ function CreateAccountForm() {
           type="button"
           onClick={() => {
             setResult(null);
-            setSigners([""]);
+            setSigners(["", ""]);
             setThresholdInput("1");
           }}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -306,7 +309,7 @@ function CreateAccountForm() {
                     <p className="text-xs text-red-400 ml-8">{errorMsg}</p>
                   )}
                 </div>
-                {signers.length > 1 && (
+                {signers.length > 2 && (
                   <button
                     type="button"
                     onClick={() => removeSigner(i)}

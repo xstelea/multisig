@@ -32,6 +32,9 @@ function HomePage() {
           <Button asChild variant="outline">
             <Link to="/create-account">Create Account</Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link to="/edit-access-rule">Edit Access Rule</Link>
+          </Button>
           <Button asChild variant="accent">
             <Link to="/proposals/new">New Proposal</Link>
           </Button>
