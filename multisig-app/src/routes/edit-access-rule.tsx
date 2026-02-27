@@ -18,6 +18,8 @@ import {
 import type { AccessRuleInfo } from "@/atom/orchestratorClient";
 import { ClientOnly } from "@/lib/ClientOnly";
 import { useState, useMemo, useEffect, useCallback } from "react";
+import * as Schema from "effect/Schema";
+import * as Either from "effect/Either";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +27,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BackLink } from "@/components/back-link";
 import { toast } from "sonner";
+
+const ThresholdSchema = (max: number) =>
+  Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, max));
 
 type EditAccessRuleSearch = {
   account?: string;
@@ -85,7 +90,7 @@ function EditAccessRuleForm() {
 
   // Signer editing
   const [signers, setSigners] = useState<string[]>([""]);
-  const [threshold, setThreshold] = useState(1);
+  const [thresholdInput, setThresholdInput] = useState("1");
 
   // Expiry
   const [expiryMode, setExpiryMode] = useState<"hours" | "epoch">("hours");
@@ -121,7 +126,7 @@ function EditAccessRuleForm() {
           setSigners(
             rule.signers.map((s) => `${s.badge_resource}:${s.badge_local_id}`)
           );
-          setThreshold(rule.threshold);
+          setThresholdInput(String(rule.threshold));
         }
       } catch (err) {
         setLoadError(String(err));
@@ -151,14 +156,34 @@ function EditAccessRuleForm() {
   const allFilled = signers.every((s) => s.trim() !== "");
   const allValid = allFilled && validSigners.length === signers.length;
 
-  const effectiveThreshold = Math.min(
-    Math.max(1, threshold),
-    validSigners.length || 1
+  const thresholdDecoded = useMemo(
+    () =>
+      Schema.decodeUnknownEither(ThresholdSchema(signers.length))(
+        thresholdInput
+      ),
+    [thresholdInput, signers.length]
   );
+
+  const effectiveThreshold = Either.isRight(thresholdDecoded)
+    ? thresholdDecoded.right
+    : 1;
+
+  const thresholdError = Either.isLeft(thresholdDecoded)
+    ? thresholdInput === ""
+      ? "Required"
+      : "Must be a whole number between 1 and " + signers.length
+    : null;
+
+  const thresholdValid = Either.isRight(thresholdDecoded);
 
   // Build manifest preview
   const manifestPreview = useMemo(() => {
-    if (!allValid || validSigners.length === 0 || !accountAddress.trim())
+    if (
+      !allValid ||
+      validSigners.length === 0 ||
+      !accountAddress.trim() ||
+      !thresholdValid
+    )
       return null;
     return buildSetOwnerRoleManifest({
       account: accountAddress.trim(),
@@ -170,8 +195,10 @@ function EditAccessRuleForm() {
   const addSigner = () => setSigners((prev) => [...prev, ""]);
   const removeSigner = (index: number) => {
     setSigners((prev) => prev.filter((_, i) => i !== index));
-    if (threshold > signers.length - 1) {
-      setThreshold(Math.max(1, signers.length - 1));
+    const newCount = signers.length - 1;
+    const parsed = parseInt(thresholdInput, 10);
+    if (!isNaN(parsed) && parsed > newCount) {
+      setThresholdInput(String(Math.max(1, newCount)));
     }
   };
   const updateSigner = (index: number, value: string) =>
@@ -384,16 +411,15 @@ function EditAccessRuleForm() {
           <div className="space-y-2">
             <Label htmlFor="threshold">Threshold</Label>
             <div className="flex items-center gap-3">
-              <Input
+              <input
                 id="threshold"
-                type="number"
-                value={threshold}
-                onChange={(e) =>
-                  setThreshold(parseInt(e.target.value, 10) || 1)
-                }
-                min={1}
-                max={signers.length}
-                className="w-20"
+                type="text"
+                inputMode="numeric"
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                className={`w-20 px-3 py-2 rounded-lg bg-muted border text-sm focus:outline-none focus:ring-2 focus:ring-accent ${
+                  thresholdError ? "border-red-500/40" : "border-border"
+                }`}
                 disabled={submitting}
               />
               <span className="text-sm text-muted-foreground">
@@ -401,6 +427,9 @@ function EditAccessRuleForm() {
                 {signers.length !== 1 ? "s" : ""} required
               </span>
             </div>
+            {thresholdError && (
+              <p className="text-xs text-red-400">{thresholdError}</p>
+            )}
           </div>
 
           {/* Manifest preview */}
@@ -537,7 +566,7 @@ function EditAccessRuleForm() {
           <Button
             type="submit"
             variant="accent"
-            disabled={submitting || !allValid}
+            disabled={submitting || !allValid || !thresholdValid}
           >
             {submitting ? "Creating Proposal..." : "Create Proposal"}
           </Button>
