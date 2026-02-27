@@ -4,6 +4,7 @@ use radix_common::prelude::*;
 use radix_transactions::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::gateway::{AccessRuleInfo, SignerInfo};
@@ -59,7 +60,7 @@ pub struct Signature {
 }
 
 /// Summary of signature collection progress.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SignatureStatus {
     pub proposal_id: Uuid,
     pub signatures: Vec<SignatureSummary>,
@@ -69,7 +70,7 @@ pub struct SignatureStatus {
     pub signers: Vec<SignerStatus>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SignatureSummary {
     pub signer_public_key: String,
     pub signer_key_hash: String,
@@ -77,7 +78,7 @@ pub struct SignatureSummary {
 }
 
 /// Per-signer status: have they signed or not, and is their signature still valid?
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SignerStatus {
     pub key_hash: String,
     pub key_type: String,

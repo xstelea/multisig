@@ -16,14 +16,19 @@ use axum::{
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
+use utoipa::OpenApi;
+use utoipa::ToSchema;
+use utoipa_swagger_ui::SwaggerUi;
 
 use radix_common::address::AddressBech32Encoder;
 use radix_common::network::NetworkDefinition;
 use radix_common::prelude::{ComponentAddress, Ed25519PrivateKey};
 
-use crate::gateway::{AccessRuleInfo, GatewayClient};
+use crate::gateway::{AccessRuleInfo, GatewayClient, SignerInfo};
 use crate::proposal_store::{CreateProposal, Proposal, ProposalStatus, ProposalStore};
-use crate::signature_collector::{SignatureCollector, SignatureStatus};
+use crate::signature_collector::{
+    SignatureCollector, SignatureStatus, SignatureSummary, SignerStatus,
+};
 use crate::transaction_builder::StoredSignature;
 
 #[derive(Clone)]
@@ -38,12 +43,12 @@ pub struct AppState {
     pub fee_payer_account: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ToSchema)]
 struct HealthResponse {
     status: &'static str,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ToSchema)]
 struct ErrorResponse {
     error: String,
 }
@@ -56,13 +61,21 @@ fn err_response(
     (status, Json(ErrorResponse { error: msg }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Server is healthy", body = HealthResponse)
+    )
+)]
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
 // --- Proposal endpoints ---
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, ToSchema)]
 struct CreateProposalRequest {
     manifest_text: String,
     expiry_epoch: u64,
@@ -71,6 +84,17 @@ struct CreateProposalRequest {
     multisig_account: Option<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/proposals",
+    tag = "proposals",
+    request_body = CreateProposalRequest,
+    responses(
+        (status = 200, description = "Proposal created", body = Proposal),
+        (status = 400, description = "Invalid manifest or no multisig account found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn create_proposal(
     State(state): State<AppState>,
     Json(req): Json<CreateProposalRequest>,
@@ -219,6 +243,15 @@ async fn create_proposal(
     Ok(Json(proposal))
 }
 
+#[utoipa::path(
+    get,
+    path = "/proposals",
+    tag = "proposals",
+    responses(
+        (status = 200, description = "List of all proposals", body = Vec<Proposal>),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn list_proposals(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Proposal>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -231,6 +264,19 @@ async fn list_proposals(
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/proposals/{id}",
+    tag = "proposals",
+    params(
+        ("id" = Uuid, Path, description = "Proposal ID")
+    ),
+    responses(
+        (status = 200, description = "Proposal details", body = Proposal),
+        (status = 404, description = "Proposal not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn get_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
@@ -258,11 +304,26 @@ async fn get_proposal(
 
 // --- Signature endpoints ---
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, ToSchema)]
 struct SignProposalRequest {
     signed_partial_transaction_hex: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/proposals/{id}/sign",
+    tag = "signatures",
+    params(
+        ("id" = Uuid, Path, description = "Proposal ID")
+    ),
+    request_body = SignProposalRequest,
+    responses(
+        (status = 200, description = "Signature accepted", body = SignatureStatus),
+        (status = 400, description = "Invalid signature or signer not in access rule", body = ErrorResponse),
+        (status = 404, description = "Proposal not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn sign_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
@@ -337,6 +398,19 @@ async fn sign_proposal(
         })
 }
 
+#[utoipa::path(
+    get,
+    path = "/proposals/{id}/signatures",
+    tag = "signatures",
+    params(
+        ("id" = Uuid, Path, description = "Proposal ID")
+    ),
+    responses(
+        (status = 200, description = "Current signature collection status", body = SignatureStatus),
+        (status = 404, description = "Proposal not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn get_signature_status(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
@@ -387,13 +461,27 @@ async fn get_signature_status(
 
 // --- Submission endpoints ---
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ToSchema)]
 struct SubmitProposalResponse {
     status: String,
     tx_id: Option<String>,
     error: Option<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/proposals/{id}/submit",
+    tag = "submissions",
+    params(
+        ("id" = Uuid, Path, description = "Proposal ID")
+    ),
+    responses(
+        (status = 200, description = "Submission result (may include tx_id even on failure)", body = SubmitProposalResponse),
+        (status = 400, description = "Proposal not in Ready status", body = ErrorResponse),
+        (status = 404, description = "Proposal not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    )
+)]
 async fn submit_proposal(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,
@@ -609,6 +697,18 @@ async fn submit_proposal(
 
 // --- Access rule endpoint ---
 
+#[utoipa::path(
+    get,
+    path = "/accounts/{address}/access-rule",
+    tag = "accounts",
+    params(
+        ("address" = String, Path, description = "Bech32-encoded account address")
+    ),
+    responses(
+        (status = 200, description = "Access rule for the account", body = AccessRuleInfo),
+        (status = 400, description = "Failed to read access rule", body = ErrorResponse)
+    )
+)]
 async fn get_access_rule(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -627,6 +727,35 @@ async fn get_access_rule(
 
     Ok(Json(access_rule))
 }
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        health,
+        create_proposal,
+        list_proposals,
+        get_proposal,
+        sign_proposal,
+        get_signature_status,
+        submit_proposal,
+        get_access_rule,
+    ),
+    components(schemas(
+        HealthResponse,
+        ErrorResponse,
+        CreateProposalRequest,
+        SignProposalRequest,
+        SubmitProposalResponse,
+        Proposal,
+        ProposalStatus,
+        SignatureStatus,
+        SignatureSummary,
+        SignerStatus,
+        AccessRuleInfo,
+        SignerInfo,
+    ))
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -722,6 +851,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/proposals/{id}/signatures", get(get_signature_status))
         .route("/proposals/{id}/submit", post(submit_proposal))
         .route("/accounts/{address}/access-rule", get(get_access_rule))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .with_state(state);
 
