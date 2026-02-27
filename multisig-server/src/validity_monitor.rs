@@ -184,6 +184,7 @@ mod tests {
         let new_access_rule = AccessRuleInfo {
             signers: vec![original_signers[0].clone(), original_signers[2].clone()],
             threshold: 2,
+            is_updatable: true,
         };
 
         let current_hashes: std::collections::HashSet<&str> = new_access_rule

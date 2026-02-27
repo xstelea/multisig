@@ -19,6 +19,7 @@ pub struct SignerInfo {
 pub struct AccessRuleInfo {
     pub signers: Vec<SignerInfo>,
     pub threshold: u8,
+    pub is_updatable: bool,
 }
 
 pub struct GatewayClient {
@@ -51,6 +52,7 @@ struct RoleAssignments {
 #[derive(Debug, Deserialize)]
 struct OwnerRole {
     rule: serde_json::Value,
+    updater: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,12 +118,15 @@ impl GatewayClient {
             .role_assignments
             .ok_or_else(|| anyhow!("No role_assignments in entity details"))?;
 
-        let owner_rule = role_assignments
+        let owner = role_assignments
             .owner
-            .ok_or_else(|| anyhow!("No owner in role_assignments"))?
-            .rule;
+            .ok_or_else(|| anyhow!("No owner in role_assignments"))?;
 
-        parse_access_rule(&owner_rule)
+        let is_updatable = owner.updater.as_deref() == Some("Owner");
+
+        let mut info = parse_access_rule(&owner.rule)?;
+        info.is_updatable = is_updatable;
+        Ok(info)
     }
 
     /// Submit a notarized transaction to the network.
@@ -300,6 +305,7 @@ fn parse_access_rule(rule_json: &serde_json::Value) -> Result<AccessRuleInfo> {
         "AllowAll" => Ok(AccessRuleInfo {
             signers: vec![],
             threshold: 0,
+            is_updatable: false,
         }),
         "DenyAll" => Err(anyhow!("Account has DenyAll access rule")),
         other => Err(anyhow!("Unsupported rule type: {other}")),
@@ -324,6 +330,7 @@ fn parse_count_of(proof_rule: &serde_json::Value) -> Result<AccessRuleInfo> {
     Ok(AccessRuleInfo {
         signers,
         threshold: count,
+        is_updatable: false,
     })
 }
 
@@ -334,6 +341,7 @@ fn parse_require(proof_rule: &serde_json::Value) -> Result<AccessRuleInfo> {
     Ok(AccessRuleInfo {
         signers: vec![signer],
         threshold: 1,
+        is_updatable: false,
     })
 }
 
@@ -349,7 +357,11 @@ fn parse_all_of(proof_rule: &serde_json::Value) -> Result<AccessRuleInfo> {
         .collect::<Result<Vec<_>>>()?;
 
     let threshold = signers.len() as u8;
-    Ok(AccessRuleInfo { signers, threshold })
+    Ok(AccessRuleInfo {
+        signers,
+        threshold,
+        is_updatable: false,
+    })
 }
 
 /// Parse AnyOf proof rule (any one can sign).
@@ -366,6 +378,7 @@ fn parse_any_of(proof_rule: &serde_json::Value) -> Result<AccessRuleInfo> {
     Ok(AccessRuleInfo {
         signers,
         threshold: 1,
+        is_updatable: false,
     })
 }
 

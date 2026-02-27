@@ -44,6 +44,7 @@ export type SignerInfo = typeof SignerInfoSchema.Type;
 export const AccessRuleInfoSchema = Schema.Struct({
   signers: Schema.Array(SignerInfoSchema),
   threshold: Schema.Number,
+  is_updatable: Schema.Boolean,
 });
 export type AccessRuleInfo = typeof AccessRuleInfoSchema.Type;
 

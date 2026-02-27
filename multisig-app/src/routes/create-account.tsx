@@ -129,12 +129,15 @@ function CreateAccountForm() {
   // Build manifest preview when all signers are valid and threshold is valid
   const thresholdValid = Either.isRight(thresholdDecoded);
   const manifestPreview = useMemo(() => {
+    const validSigners = parsed.filter(
+      (p): p is ParsedSigner => p !== null && !("error" in p)
+    );
     if (!allValid || validSigners.length === 0 || !thresholdValid) return null;
     return buildCreateAccountManifest({
       signers: validSigners,
       threshold: effectiveThreshold,
     });
-  }, [allValid, validSigners, effectiveThreshold, thresholdValid]);
+  }, [allValid, parsed, effectiveThreshold, thresholdValid]);
 
   const addSigner = () => setSigners((prev) => [...prev, ""]);
   const removeSigner = (index: number) => {

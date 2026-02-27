@@ -114,8 +114,13 @@ function EditAccessRuleForm() {
   const fetchAccessRule = useCallback(
     async (address: string) => {
       if (!address.trim()) return;
+      if (!address.trim().startsWith("account_")) {
+        setLoadError("Address must start with 'account_'");
+        return;
+      }
       setLoadingRule(true);
       setLoadError(null);
+      setError(null);
       setCurrentRule(null);
       try {
         const rule = await getAccessRule(address.trim());
@@ -142,7 +147,7 @@ function EditAccessRuleForm() {
     if (accountParam) {
       fetchAccessRule(accountParam);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accountParam, fetchAccessRule]);
 
   // Parse all signers
   const parsed = useMemo(
@@ -178,6 +183,9 @@ function EditAccessRuleForm() {
 
   // Build manifest preview
   const manifestPreview = useMemo(() => {
+    const validSigners = parsed.filter(
+      (p): p is ParsedSigner => p !== null && !("error" in p)
+    );
     if (
       !allValid ||
       validSigners.length === 0 ||
@@ -190,7 +198,7 @@ function EditAccessRuleForm() {
       signers: validSigners,
       threshold: effectiveThreshold,
     });
-  }, [allValid, validSigners, effectiveThreshold, accountAddress]);
+  }, [allValid, parsed, effectiveThreshold, accountAddress, thresholdValid]);
 
   const addSigner = () => setSigners((prev) => [...prev, ""]);
   const removeSigner = (index: number) => {
@@ -319,8 +327,17 @@ function EditAccessRuleForm() {
         </div>
       )}
 
-      {/* Signer list (only show after rule is loaded) */}
-      {currentRule && (
+      {/* Locked owner role warning */}
+      {currentRule && !currentRule.is_updatable && (
+        <Alert>
+          <AlertDescription>
+            This account's owner role is locked and cannot be changed.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Signer list (only show after rule is loaded and updatable) */}
+      {currentRule && currentRule.is_updatable && (
         <>
           <div className="space-y-2">
             <Label>New Signers</Label>
@@ -370,7 +387,7 @@ function EditAccessRuleForm() {
                         <p className="text-xs text-red-400 ml-8">{errorMsg}</p>
                       )}
                     </div>
-                    {signers.length > 1 && (
+                    {signers.length > 2 && (
                       <button
                         type="button"
                         onClick={() => removeSigner(i)}

@@ -451,6 +451,7 @@ YIELD_TO_PARENT;
                 badge_local_id: "[aabbccdd]".into(),
             }],
             threshold: 1,
+            is_updatable: true,
         };
         assert!(find_signer_by_hash(&access_rule, "aabbccdd").is_some());
         assert!(find_signer_by_hash(&access_rule, "00000000").is_none());
@@ -508,6 +509,7 @@ YIELD_TO_PARENT;
                 badge_local_id: format!("[{key_hash}]"),
             }],
             threshold: 1,
+            is_updatable: true,
         };
 
         let (hex_str, _) = build_test_signed_partial(&private_key);
@@ -530,6 +532,7 @@ YIELD_TO_PARENT;
                 badge_local_id: "[0000...]".into(),
             }],
             threshold: 1,
+            is_updatable: true,
         };
 
         let (hex_str, _) = build_test_signed_partial(&private_key);
