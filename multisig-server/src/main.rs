@@ -1,4 +1,5 @@
 mod gateway;
+mod manifest_analyzer;
 mod proposal_store;
 mod signature_collector;
 mod transaction_builder;
@@ -65,19 +66,72 @@ async fn health() -> Json<HealthResponse> {
 struct CreateProposalRequest {
     manifest_text: String,
     expiry_epoch: u64,
-    multisig_account: String,
 }
 
 async fn create_proposal(
     State(state): State<AppState>,
     Json(req): Json<CreateProposalRequest>,
 ) -> Result<Json<Proposal>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    if req.multisig_account.trim().is_empty() {
-        return Err(err_response(
-            axum::http::StatusCode::BAD_REQUEST,
-            "multisig_account is required".to_string(),
-        ));
+    // Compile manifest first — used for both analysis and subintent building
+    let compiled_manifest =
+        transaction_builder::compile_subintent_manifest(&req.manifest_text, state.network_id)
+            .map_err(|e| {
+                tracing::error!("Failed to compile manifest: {e}");
+                err_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("Failed to compile manifest: {e}"),
+                )
+            })?;
+
+    // Extract accounts that need authorization from the manifest
+    let network_def = match state.network_id {
+        0x01 => NetworkDefinition::mainnet(),
+        _ => NetworkDefinition::stokenet(),
+    };
+    let auth_accounts =
+        manifest_analyzer::extract_accounts_requiring_auth(&compiled_manifest, &network_def)
+            .map_err(|e| {
+                tracing::error!("Failed to analyze manifest: {e}");
+                err_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("Failed to analyze manifest: {e}"),
+                )
+            })?;
+
+    // Query access rules for each auth-requiring account and keep those with
+    // non-trivial (multi-signer) rules.
+    let mut multisig_accounts = Vec::new();
+    for account in &auth_accounts {
+        let access_rule = state.gateway.read_access_rule(account).await.map_err(|e| {
+            tracing::error!("Failed to read access rule for {account}: {e}");
+            err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read access rule for {account}: {e}"),
+            )
+        })?;
+        if access_rule.signers.len() > 1 || access_rule.threshold > 1 {
+            multisig_accounts.push(account.clone());
+        }
     }
+
+    let multisig_account = match multisig_accounts.len() {
+        0 => {
+            return Err(err_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                "No multisig accounts found in manifest. The manifest must reference an account with multi-signer access rules.".to_string(),
+            ));
+        }
+        1 => multisig_accounts.into_iter().next().unwrap(),
+        _ => {
+            return Err(err_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                format!(
+                    "Multiple multisig accounts found in manifest: {}. Only one multisig account per proposal is supported.",
+                    multisig_accounts.join(", ")
+                ),
+            ));
+        }
+    };
 
     // Get current epoch to set epoch_min
     let current_epoch = state.gateway.get_current_epoch().await.map_err(|e| {
@@ -98,11 +152,9 @@ async fn create_proposal(
         ));
     }
 
-    // Build the unsigned subintent — discriminator and timestamp window are
-    // generated inside and returned so we store exactly what was baked into
-    // the partial transaction bytes.
-    let subintent_result = transaction_builder::build_unsigned_subintent(
-        &req.manifest_text,
+    // Build the unsigned subintent from the already-compiled manifest
+    let subintent_result = transaction_builder::build_unsigned_subintent_from_compiled(
+        compiled_manifest,
         state.network_id,
         epoch_min,
         epoch_max,
@@ -120,7 +172,7 @@ async fn create_proposal(
         .proposal_store
         .create(CreateProposal {
             manifest_text: req.manifest_text,
-            multisig_account: req.multisig_account,
+            multisig_account,
             epoch_min: epoch_min as i64,
             epoch_max: epoch_max as i64,
             subintent_hash: subintent_result.subintent_hash,

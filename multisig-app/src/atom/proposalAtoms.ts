@@ -19,7 +19,6 @@ export const createProposalAtom = runtime.fn(
     input: {
       manifest_text: string;
       expiry_epoch: number;
-      multisig_account: string;
     },
     get
   ) =>
