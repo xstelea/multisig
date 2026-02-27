@@ -20,7 +20,7 @@ This starts PostgreSQL, the backend, and the frontend in one command.
 
 ### How It Works
 
-The server builds transaction subintents from user-provided manifests, and each signer approves via wallet pre-authorization. The server collects signatures, validates them against the account's on-ledger access rule, and — once the threshold is met — assembles a `NotarizedTransactionV2` with a fee-payment child and a withdrawal child, then submits it to the Radix Gateway.
+The server builds a transaction subintent from the user-provided manifest, and each signer approves via wallet pre-authorization. The server collects signatures, validates them against the account's on-ledger access rule, and — once the threshold is met — assembles a `NotarizedTransactionV2` with one child subintent (the withdrawal) and a main intent that pays fees from the server's own account, then submits it to the Radix Gateway.
 
 ### Signing Flow
 
@@ -48,13 +48,10 @@ sequenceDiagram
     Server-->>Browser: Signature stored (status: signing → ready when threshold met)
 
     Note over Browser,Gateway: 3. Submit Transaction
-    Browser->>Server: POST /proposals/{id}/prepare {fee_payer_account}
-    Server-->>Browser: Fee manifest (lock_fee 10 XRD + YIELD_TO_PARENT)
-    Browser->>Wallet: sendPreAuthorizationRequest(fee_manifest)
-    Wallet-->>Browser: Signed fee payment hex
-    Browser->>Server: POST /proposals/{id}/submit {signed_fee_payment_hex}
+    Browser->>Server: POST /proposals/{id}/submit
     Server->>Server: Reconstruct withdrawal partial (stored unsigned + collected sigs)
-    Server->>Server: Compose NotarizedTransactionV2 with both children
+    Server->>Server: Compose NotarizedTransactionV2 (1 child: withdrawal)
+    Server->>Server: Notarize with fee payer key (pays fee in main manifest)
     Server->>Gateway: POST /transaction/submit
     Gateway-->>Server: Poll until committed
     Server-->>Browser: status: committed
@@ -62,21 +59,20 @@ sequenceDiagram
 
 ### Transaction Structure
 
-The final `NotarizedTransactionV2` contains two child subintents:
+The final `NotarizedTransactionV2` contains one child subintent:
 
 | Child | Manifest | Signed by |
 |---|---|---|
-| `fee_payment` | `lock_fee("10") → YIELD_TO_PARENT` | Fee payer (at submit time) |
 | `withdrawal` | User's proposal manifest → `YIELD_TO_PARENT` | Multisig signers (collected during signing phase) |
 
-The parent transaction manifest simply yields to each child in order:
+The main intent manifest pays fees and yields to the child:
 
 ```
-YIELD_TO_CHILD("fee_payment");
+CALL_METHOD Address("<fee_payer_account>") "lock_fee" Decimal("10");
 YIELD_TO_CHILD("withdrawal");
 ```
 
-A server-generated ephemeral Ed25519 key notarizes the transaction (`notary_is_signatory: false` — it controls nothing and exists only to satisfy the `TransactionV2` protocol requirement).
+The server's fee payer key notarizes the transaction (`notary_is_signatory: true` — the key controls the fee payer account, authorising the `lock_fee` call).
 
 ## CLI Tools
 
