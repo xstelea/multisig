@@ -85,7 +85,7 @@ function CreateAccountForm() {
   useAtomMount(dappToolkitAtom);
   const rdtResult = useAtomValue(dappToolkitAtom);
 
-  const [signers, setSigners] = useState<string[]>([""]);
+  const [signers, setSigners] = useState<string[]>(["", ""]);
   const [thresholdInput, setThresholdInput] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -244,7 +244,7 @@ function CreateAccountForm() {
           type="button"
           onClick={() => {
             setResult(null);
-            setSigners([""]);
+            setSigners(["", ""]);
             setThresholdInput("1");
           }}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -306,7 +306,7 @@ function CreateAccountForm() {
                     <p className="text-xs text-red-400 ml-8">{errorMsg}</p>
                   )}
                 </div>
-                {signers.length > 1 && (
+                {signers.length > 2 && (
                   <button
                     type="button"
                     onClick={() => removeSigner(i)}
