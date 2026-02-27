@@ -106,7 +106,6 @@ export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
     readonly createProposal: (input: {
       manifest_text: string;
       expiry_epoch: number;
-      multisig_account: string;
     }) => Effect.Effect<Proposal, Error>;
     readonly listProposals: () => Effect.Effect<ReadonlyArray<Proposal>, Error>;
     readonly getProposal: (id: string) => Effect.Effect<Proposal, Error>;
@@ -128,7 +127,9 @@ export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
 const OrchestratorClientLive = Layer.effect(
   OrchestratorClient,
   Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
+    const client = (yield* HttpClient.HttpClient).pipe(
+      HttpClient.filterStatusOk
+    );
     const baseUrl = envVars.ORCHESTRATOR_URL;
 
     return {
@@ -149,7 +150,6 @@ const OrchestratorClientLive = Layer.effect(
       createProposal: (input: {
         manifest_text: string;
         expiry_epoch: number;
-        multisig_account: string;
       }) =>
         HttpClientRequest.post(`${baseUrl}/proposals`).pipe(
           HttpClientRequest.bodyJson(input),

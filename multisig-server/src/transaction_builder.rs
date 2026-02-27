@@ -13,23 +13,56 @@ pub struct SubintentResult {
     pub partial_transaction_bytes: Vec<u8>,
 }
 
+fn network_definition(network_id: u8) -> Result<NetworkDefinition> {
+    match network_id {
+        0xf2 => Ok(NetworkDefinition::simulator()),
+        0x02 => Ok(NetworkDefinition::stokenet()),
+        0x01 => Ok(NetworkDefinition::mainnet()),
+        _ => Err(anyhow::anyhow!("Unsupported network ID: {network_id}")),
+    }
+}
+
+/// Compile manifest text into a `SubintentManifestV2`.
+///
+/// Appends `YIELD_TO_PARENT;` if not already present.
+pub fn compile_subintent_manifest(
+    manifest_text: &str,
+    network_id: u8,
+) -> Result<SubintentManifestV2> {
+    let full_manifest = if manifest_text.contains("YIELD_TO_PARENT") {
+        manifest_text.to_string()
+    } else {
+        format!("{}\nYIELD_TO_PARENT;\n", manifest_text.trim_end())
+    };
+
+    let network = network_definition(network_id)?;
+
+    compile_manifest(&full_manifest, &network, BlobProvider::new())
+        .map_err(|e| anyhow::anyhow!("Failed to compile manifest: {e:?}"))
+}
+
 /// Build an unsigned subintent from raw manifest text.
 ///
-/// Appends `YIELD_TO_PARENT;` to the manifest if not present,
-/// compiles it, wraps in a PartialTransactionV2 with the given
-/// epoch window, a safe random discriminator (≤ 2^53 so it
-/// round-trips through JavaScript f64 without precision loss),
-/// and a 24-hour proposer-timestamp window anchored to now.
+/// Convenience wrapper that compiles the manifest and builds in one step.
+#[allow(dead_code)]
 pub fn build_unsigned_subintent(
     manifest_text: &str,
     network_id: u8,
     epoch_min: u64,
     epoch_max: u64,
 ) -> Result<SubintentResult> {
+    let manifest = compile_subintent_manifest(manifest_text, network_id)?;
+    build_unsigned_subintent_from_compiled(manifest, network_id, epoch_min, epoch_max)
+}
+
+/// Build an unsigned subintent from a pre-compiled manifest.
+pub fn build_unsigned_subintent_from_compiled(
+    manifest: SubintentManifestV2,
+    network_id: u8,
+    epoch_min: u64,
+    epoch_max: u64,
+) -> Result<SubintentResult> {
     let mut rng = rand::thread_rng();
-    // Keep discriminator in the JavaScript safe-integer range (< 2^53) so it
-    // is transmitted as a JSON number without precision loss and is always a
-    // valid positive value when the wallet parses it.
     let discriminator: u64 = rng.gen::<u64>() % (1u64 << 53);
 
     let now_secs = std::time::SystemTime::now()
@@ -37,8 +70,8 @@ pub fn build_unsigned_subintent(
         .unwrap_or_default()
         .as_secs() as i64;
 
-    build_unsigned_subintent_inner(
-        manifest_text,
+    build_subintent_from_parts(
+        manifest,
         network_id,
         epoch_min,
         epoch_max,
@@ -57,8 +90,9 @@ pub fn build_unsigned_subintent_with_discriminator(
     epoch_max: u64,
     discriminator: u64,
 ) -> Result<SubintentResult> {
-    build_unsigned_subintent_inner(
-        manifest_text,
+    let manifest = compile_subintent_manifest(manifest_text, network_id)?;
+    build_subintent_from_parts(
+        manifest,
         network_id,
         epoch_min,
         epoch_max,
@@ -68,8 +102,8 @@ pub fn build_unsigned_subintent_with_discriminator(
     )
 }
 
-fn build_unsigned_subintent_inner(
-    manifest_text: &str,
+fn build_subintent_from_parts(
+    manifest: SubintentManifestV2,
     network_id: u8,
     epoch_min: u64,
     epoch_max: u64,
@@ -77,24 +111,7 @@ fn build_unsigned_subintent_inner(
     min_proposer_timestamp: i64,
     max_proposer_timestamp: i64,
 ) -> Result<SubintentResult> {
-    // Append YIELD_TO_PARENT if not present
-    let full_manifest = if manifest_text.contains("YIELD_TO_PARENT") {
-        manifest_text.to_string()
-    } else {
-        format!("{}\nYIELD_TO_PARENT;\n", manifest_text.trim_end())
-    };
-
-    let network = match network_id {
-        0xf2 => NetworkDefinition::simulator(),
-        0x02 => NetworkDefinition::stokenet(),
-        0x01 => NetworkDefinition::mainnet(),
-        _ => return Err(anyhow::anyhow!("Unsupported network ID: {network_id}")),
-    };
-
-    // Compile the manifest string into a SubintentManifestV2
-    let manifest: SubintentManifestV2 =
-        compile_manifest(&full_manifest, &network, BlobProvider::new())
-            .map_err(|e| anyhow::anyhow!("Failed to compile manifest: {e:?}"))?;
+    let network = network_definition(network_id)?;
 
     // Build the unsigned partial transaction — timestamps are baked in here so
     // the wallet (given the same header values) will produce identical bytes.
@@ -240,12 +257,7 @@ pub fn compose_main_transaction_with_discriminator(
     withdrawal_signed_partial: SignedPartialTransactionV2,
     discriminator: u64,
 ) -> Result<ComposedTransaction> {
-    let network = match network_id {
-        0xf2 => NetworkDefinition::simulator(),
-        0x02 => NetworkDefinition::stokenet(),
-        0x01 => NetworkDefinition::mainnet(),
-        _ => return Err(anyhow!("Unsupported network ID: {network_id}")),
-    };
+    let network = network_definition(network_id)?;
 
     let fee_payer_public_key: PublicKey = fee_payer_private_key.public_key().into();
 

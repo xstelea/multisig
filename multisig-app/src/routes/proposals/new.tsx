@@ -48,7 +48,6 @@ function FormSkeleton() {
 
 function CreateProposalForm() {
   const navigate = useNavigate();
-  const [multisigAccount, setMultisigAccount] = useState("");
   const [manifestText, setManifestText] = useState("");
   const [expiryMode, setExpiryMode] = useState<"hours" | "epoch">("hours");
   const [expiryHours, setExpiryHours] = useState("");
@@ -69,11 +68,6 @@ function CreateProposalForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    if (!multisigAccount.trim()) {
-      setError("Multisig account address is required");
-      return;
-    }
 
     if (!manifestText.trim()) {
       setError("Manifest text is required");
@@ -111,7 +105,6 @@ function CreateProposalForm() {
       const proposal = await createProposal({
         manifest_text: manifestText,
         expiry_epoch: epoch,
-        multisig_account: multisigAccount.trim(),
       });
       navigate({ to: "/proposals/$id", params: { id: proposal.id } });
     } catch (err) {
@@ -123,22 +116,6 @@ function CreateProposalForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="multisig-account">Multisig Account Address</Label>
-        <Input
-          id="multisig-account"
-          type="text"
-          value={multisigAccount}
-          onChange={(e) => setMultisigAccount(e.target.value)}
-          placeholder="account_tdx_2_..."
-          className="font-mono"
-          disabled={submitting}
-        />
-        <p className="text-xs text-muted-foreground">
-          The multisig account that this proposal will execute against.
-        </p>
-      </div>
-
       <div className="space-y-2">
         <Label htmlFor="manifest">Transaction Manifest</Label>
         <Textarea
