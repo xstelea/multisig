@@ -10,6 +10,11 @@ import {
 } from "@/lib/manifest";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import * as Schema from "effect/Schema";
+import * as Either from "effect/Either";
+
+const ThresholdSchema = (max: number) =>
+  Schema.NumberFromString.pipe(Schema.int(), Schema.between(1, max));
 
 export const Route = createFileRoute("/create-account")({
   component: CreateAccountPage,
@@ -81,7 +86,7 @@ function CreateAccountForm() {
   const rdtResult = useAtomValue(dappToolkitAtom);
 
   const [signers, setSigners] = useState<string[]>([""]);
-  const [threshold, setThreshold] = useState(1);
+  const [thresholdInput, setThresholdInput] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{
@@ -103,26 +108,41 @@ function CreateAccountForm() {
   const allFilled = signers.every((s) => s.trim() !== "");
   const allValid = allFilled && validSigners.length === signers.length;
 
-  // Clamp threshold when signer count changes
-  const effectiveThreshold = Math.min(
-    Math.max(1, threshold),
-    validSigners.length || 1
+  // Decode threshold from raw string input using Effect Schema
+  const thresholdDecoded = useMemo(
+    () =>
+      Schema.decodeUnknownEither(ThresholdSchema(signers.length))(
+        thresholdInput
+      ),
+    [thresholdInput, signers.length]
   );
 
-  // Build manifest preview when all signers are valid
+  const effectiveThreshold = Either.isRight(thresholdDecoded)
+    ? thresholdDecoded.right
+    : 1;
+  const thresholdError = Either.isLeft(thresholdDecoded)
+    ? thresholdInput === ""
+      ? "Required"
+      : "Must be a whole number between 1 and " + signers.length
+    : null;
+
+  // Build manifest preview when all signers are valid and threshold is valid
+  const thresholdValid = Either.isRight(thresholdDecoded);
   const manifestPreview = useMemo(() => {
-    if (!allValid || validSigners.length === 0) return null;
+    if (!allValid || validSigners.length === 0 || !thresholdValid) return null;
     return buildCreateAccountManifest({
       signers: validSigners,
       threshold: effectiveThreshold,
     });
-  }, [allValid, validSigners, effectiveThreshold]);
+  }, [allValid, validSigners, effectiveThreshold, thresholdValid]);
 
   const addSigner = () => setSigners((prev) => [...prev, ""]);
   const removeSigner = (index: number) => {
     setSigners((prev) => prev.filter((_, i) => i !== index));
-    if (threshold > signers.length - 1) {
-      setThreshold(Math.max(1, signers.length - 1));
+    const newCount = signers.length - 1;
+    const currentThreshold = Number(thresholdInput);
+    if (!Number.isNaN(currentThreshold) && currentThreshold > newCount) {
+      setThresholdInput(String(Math.max(1, newCount)));
     }
   };
   const updateSigner = (index: number, value: string) =>
@@ -134,6 +154,12 @@ function CreateAccountForm() {
 
     if (!allValid) {
       setError("All signer fields must contain valid keys");
+      return;
+    }
+    if (!thresholdValid) {
+      setError(
+        "Threshold must be a valid number between 1 and " + signers.length
+      );
       return;
     }
     if (!manifestPreview) {
@@ -219,7 +245,7 @@ function CreateAccountForm() {
           onClick={() => {
             setResult(null);
             setSigners([""]);
-            setThreshold(1);
+            setThresholdInput("1");
           }}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -325,18 +351,22 @@ function CreateAccountForm() {
         <div className="flex items-center gap-3">
           <input
             id="threshold"
-            type="number"
-            value={threshold}
-            onChange={(e) => setThreshold(parseInt(e.target.value, 10) || 1)}
-            min={1}
-            max={signers.length}
-            className="w-20 px-3 py-2 rounded-lg bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            type="text"
+            inputMode="numeric"
+            value={thresholdInput}
+            onChange={(e) => setThresholdInput(e.target.value)}
+            className={`w-20 px-3 py-2 rounded-lg bg-muted border text-sm focus:outline-none focus:ring-2 focus:ring-accent ${
+              thresholdError ? "border-red-500/40" : "border-border"
+            }`}
             disabled={submitting}
           />
           <span className="text-sm text-muted-foreground">
             of {signers.length} signer{signers.length !== 1 ? "s" : ""} required
           </span>
         </div>
+        {thresholdError && (
+          <p className="text-xs text-red-400">{thresholdError}</p>
+        )}
         <p className="text-xs text-muted-foreground">
           Minimum signatures needed to authorize transactions.
         </p>
@@ -372,7 +402,7 @@ function CreateAccountForm() {
 
       <button
         type="submit"
-        disabled={submitting || !allValid}
+        disabled={submitting || !allValid || !thresholdValid}
         className="inline-flex items-center gap-2 rounded-md bg-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {submitting ? "Creating..." : "Create Account"}
