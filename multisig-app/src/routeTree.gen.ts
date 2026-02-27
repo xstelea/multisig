@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as EditAccessRuleRouteImport } from './routes/edit-access-rule'
 import { Route as CreateAccountRouteImport } from './routes/create-account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProposalsNewRouteImport } from './routes/proposals/new'
 import { Route as ProposalsIdRouteImport } from './routes/proposals/$id'
 
+const EditAccessRuleRoute = EditAccessRuleRouteImport.update({
+  id: '/edit-access-rule',
+  path: '/edit-access-rule',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CreateAccountRoute = CreateAccountRouteImport.update({
   id: '/create-account',
   path: '/create-account',
@@ -38,12 +44,14 @@ const ProposalsIdRoute = ProposalsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/create-account': typeof CreateAccountRoute
+  '/edit-access-rule': typeof EditAccessRuleRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/create-account': typeof CreateAccountRoute
+  '/edit-access-rule': typeof EditAccessRuleRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
@@ -51,26 +59,51 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/create-account': typeof CreateAccountRoute
+  '/edit-access-rule': typeof EditAccessRuleRoute
   '/proposals/$id': typeof ProposalsIdRoute
   '/proposals/new': typeof ProposalsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
+  fullPaths:
+    | '/'
+    | '/create-account'
+    | '/edit-access-rule'
+    | '/proposals/$id'
+    | '/proposals/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
-  id: '__root__' | '/' | '/create-account' | '/proposals/$id' | '/proposals/new'
+  to:
+    | '/'
+    | '/create-account'
+    | '/edit-access-rule'
+    | '/proposals/$id'
+    | '/proposals/new'
+  id:
+    | '__root__'
+    | '/'
+    | '/create-account'
+    | '/edit-access-rule'
+    | '/proposals/$id'
+    | '/proposals/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CreateAccountRoute: typeof CreateAccountRoute
+  EditAccessRuleRoute: typeof EditAccessRuleRoute
   ProposalsIdRoute: typeof ProposalsIdRoute
   ProposalsNewRoute: typeof ProposalsNewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/edit-access-rule': {
+      id: '/edit-access-rule'
+      path: '/edit-access-rule'
+      fullPath: '/edit-access-rule'
+      preLoaderRoute: typeof EditAccessRuleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/create-account': {
       id: '/create-account'
       path: '/create-account'
@@ -105,6 +138,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CreateAccountRoute: CreateAccountRoute,
+  EditAccessRuleRoute: EditAccessRuleRoute,
   ProposalsIdRoute: ProposalsIdRoute,
   ProposalsNewRoute: ProposalsNewRoute,
 }

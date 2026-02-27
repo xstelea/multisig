@@ -96,7 +96,7 @@ export function buildCreateAccountManifest({
     .join(",\n");
 
   return `CREATE_ACCOUNT_ADVANCED
-    Enum<1u8>(
+    Enum<2u8>(
         Enum<2u8>(
             Enum<0u8>(
                 Enum<2u8>(
@@ -109,5 +109,38 @@ ${signerEntries}
         )
     )
     Enum<0u8>()
+;`;
+}
+
+export function buildSetOwnerRoleManifest({
+  account,
+  signers,
+  threshold,
+}: {
+  account: string;
+  signers: ParsedSigner[];
+  threshold: number;
+}): string {
+  const signerEntries = signers
+    .map(
+      (s) =>
+        `                Enum<0u8>(\n` +
+        `                    NonFungibleGlobalId("${s.resource}:[${s.localId}]")\n` +
+        `                )`
+    )
+    .join(",\n");
+
+  return `SET_OWNER_ROLE
+    Address("${account}")
+    Enum<2u8>(
+        Enum<0u8>(
+            Enum<2u8>(
+                ${threshold}u8,
+                Array<Enum>(
+${signerEntries}
+                )
+            )
+        )
+    )
 ;`;
 }

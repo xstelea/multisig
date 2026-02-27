@@ -21,7 +21,7 @@ use radix_common::address::AddressBech32Encoder;
 use radix_common::network::NetworkDefinition;
 use radix_common::prelude::{ComponentAddress, Ed25519PrivateKey};
 
-use crate::gateway::GatewayClient;
+use crate::gateway::{AccessRuleInfo, GatewayClient};
 use crate::proposal_store::{CreateProposal, Proposal, ProposalStatus, ProposalStore};
 use crate::signature_collector::{SignatureCollector, SignatureStatus};
 use crate::transaction_builder::StoredSignature;
@@ -66,6 +66,9 @@ async fn health() -> Json<HealthResponse> {
 struct CreateProposalRequest {
     manifest_text: String,
     expiry_epoch: u64,
+    /// When provided, skip manifest analysis and use this address directly.
+    /// Useful for SET_OWNER_ROLE manifests that the analyzer can't detect.
+    multisig_account: Option<String>,
 }
 
 async fn create_proposal(
@@ -83,53 +86,76 @@ async fn create_proposal(
                 )
             })?;
 
-    // Extract accounts that need authorization from the manifest
-    let network_def = match state.network_id {
-        0x01 => NetworkDefinition::mainnet(),
-        _ => NetworkDefinition::stokenet(),
-    };
-    let auth_accounts =
-        manifest_analyzer::extract_accounts_requiring_auth(&compiled_manifest, &network_def)
+    // Determine the multisig account: either provided explicitly or detected from manifest
+    let multisig_account = if let Some(provided) = req.multisig_account {
+        // Validate that the provided address is actually a multisig account
+        let access_rule = state
+            .gateway
+            .read_access_rule(&provided)
+            .await
             .map_err(|e| {
-                tracing::error!("Failed to analyze manifest: {e}");
+                tracing::error!("Failed to read access rule for {provided}: {e}");
                 err_response(
                     axum::http::StatusCode::BAD_REQUEST,
-                    format!("Failed to analyze manifest: {e}"),
+                    format!("Failed to read access rule: {e}"),
                 )
             })?;
-
-    // Query access rules for each auth-requiring account and keep those with
-    // non-trivial (multi-signer) rules.
-    let mut multisig_accounts = Vec::new();
-    for account in &auth_accounts {
-        let access_rule = state.gateway.read_access_rule(account).await.map_err(|e| {
-            tracing::error!("Failed to read access rule for {account}: {e}");
-            err_response(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to read access rule for {account}: {e}"),
-            )
-        })?;
-        if access_rule.signers.len() > 1 || access_rule.threshold > 1 {
-            multisig_accounts.push(account.clone());
-        }
-    }
-
-    let multisig_account = match multisig_accounts.len() {
-        0 => {
+        if access_rule.signers.len() <= 1 && access_rule.threshold <= 1 {
             return Err(err_response(
                 axum::http::StatusCode::BAD_REQUEST,
-                "No multisig accounts found in manifest. The manifest must reference an account with multi-signer access rules.".to_string(),
+                "Provided account is not a multisig account".to_string(),
             ));
         }
-        1 => multisig_accounts.into_iter().next().unwrap(),
-        _ => {
-            return Err(err_response(
-                axum::http::StatusCode::BAD_REQUEST,
-                format!(
-                    "Multiple multisig accounts found in manifest: {}. Only one multisig account per proposal is supported.",
-                    multisig_accounts.join(", ")
-                ),
-            ));
+        provided
+    } else {
+        // Extract accounts that need authorization from the manifest
+        let network_def = match state.network_id {
+            0x01 => NetworkDefinition::mainnet(),
+            _ => NetworkDefinition::stokenet(),
+        };
+        let auth_accounts =
+            manifest_analyzer::extract_accounts_requiring_auth(&compiled_manifest, &network_def)
+                .map_err(|e| {
+                    tracing::error!("Failed to analyze manifest: {e}");
+                    err_response(
+                        axum::http::StatusCode::BAD_REQUEST,
+                        format!("Failed to analyze manifest: {e}"),
+                    )
+                })?;
+
+        // Query access rules for each auth-requiring account and keep those with
+        // non-trivial (multi-signer) rules.
+        let mut multisig_accounts = Vec::new();
+        for account in &auth_accounts {
+            let access_rule = state.gateway.read_access_rule(account).await.map_err(|e| {
+                tracing::error!("Failed to read access rule for {account}: {e}");
+                err_response(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to read access rule for {account}: {e}"),
+                )
+            })?;
+            if access_rule.signers.len() > 1 || access_rule.threshold > 1 {
+                multisig_accounts.push(account.clone());
+            }
+        }
+
+        match multisig_accounts.len() {
+            0 => {
+                return Err(err_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "No multisig accounts found in manifest. The manifest must reference an account with multi-signer access rules.".to_string(),
+                ));
+            }
+            1 => multisig_accounts.into_iter().next().unwrap(),
+            _ => {
+                return Err(err_response(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!(
+                        "Multiple multisig accounts found in manifest: {}. Only one multisig account per proposal is supported.",
+                        multisig_accounts.join(", ")
+                    ),
+                ));
+            }
         }
     };
 
@@ -581,6 +607,27 @@ async fn submit_proposal(
     }
 }
 
+// --- Access rule endpoint ---
+
+async fn get_access_rule(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+) -> Result<Json<AccessRuleInfo>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let access_rule = state
+        .gateway
+        .read_access_rule(&address)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read access rule for {address}: {e}");
+            err_response(
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("Failed to read access rule: {e}"),
+            )
+        })?;
+
+    Ok(Json(access_rule))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -674,6 +721,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/proposals/{id}/sign", post(sign_proposal))
         .route("/proposals/{id}/signatures", get(get_signature_status))
         .route("/proposals/{id}/submit", post(submit_proposal))
+        .route("/accounts/{address}/access-rule", get(get_access_rule))
         .layer(cors)
         .with_state(state);
 

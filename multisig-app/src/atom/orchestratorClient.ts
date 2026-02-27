@@ -103,9 +103,13 @@ export class OrchestratorClient extends Context.Tag("OrchestratorClient")<
   OrchestratorClient,
   {
     readonly health: () => Effect.Effect<{ status: string }, Error>;
+    readonly getAccessRule: (
+      address: string
+    ) => Effect.Effect<AccessRuleInfo, Error>;
     readonly createProposal: (input: {
       manifest_text: string;
       expiry_epoch: number;
+      multisig_account?: string;
     }) => Effect.Effect<Proposal, Error>;
     readonly listProposals: () => Effect.Effect<ReadonlyArray<Proposal>, Error>;
     readonly getProposal: (id: string) => Effect.Effect<Proposal, Error>;
@@ -147,9 +151,26 @@ const OrchestratorClientLive = Layer.effect(
           )
         ),
 
+      getAccessRule: (address: string) =>
+        client
+          .execute(
+            HttpClientRequest.get(`${baseUrl}/accounts/${address}/access-rule`)
+          )
+          .pipe(
+            Effect.flatMap((res) => res.json),
+            Effect.flatMap(Schema.decodeUnknown(AccessRuleInfoSchema)),
+            Effect.scoped,
+            Effect.catchAll((e) =>
+              extractErrorMessage(e).pipe(
+                Effect.flatMap((msg) => Effect.fail(new Error(msg)))
+              )
+            )
+          ),
+
       createProposal: (input: {
         manifest_text: string;
         expiry_epoch: number;
+        multisig_account?: string;
       }) =>
         HttpClientRequest.post(`${baseUrl}/proposals`).pipe(
           HttpClientRequest.bodyJson(input),
